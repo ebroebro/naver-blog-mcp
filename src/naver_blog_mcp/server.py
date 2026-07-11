@@ -74,7 +74,8 @@ class NaverBlogMCPServer:
                     result = await handle_create_post(
                         page=page,
                         title=arguments["title"],
-                        content=arguments["content"],
+                        content=arguments.get("content"),
+                        blocks=arguments.get("blocks"),
                         category=arguments.get("category"),
                         tags=arguments.get("tags"),
                         images=arguments.get("images"),
@@ -154,6 +155,9 @@ class NaverBlogMCPServer:
 
         # 세션 복원 또는 새 컨텍스트 생성
         self.context = await self.session_manager.get_or_create_session(self.browser)
+        await self.context.grant_permissions(
+            ["clipboard-read", "clipboard-write"], origin="https://blog.naver.com"
+        )
         logger.info("Browser context initialized")
 
     async def cleanup(self):

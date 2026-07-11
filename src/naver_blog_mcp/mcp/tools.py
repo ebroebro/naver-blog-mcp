@@ -41,6 +41,19 @@ TOOLS_METADATA = {
                     "items": {"type": "string"},
                     "description": "태그 목록 (선택)",
                 },
+                "blocks": {
+                    "type": "array",
+                    "description": "순서형 본문 블록. 있으면 content/images 대신 이 순서대로 작성. 텍스트는 지정 위치에, 이미지는 캐럿 위치에 삽입.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": ["text", "image"]},
+                            "text": {"type": "string", "description": "type=text일 때 본문 텍스트"},
+                            "path": {"type": "string", "description": "type=image일 때 이미지 파일 경로"},
+                        },
+                        "required": ["type"],
+                    },
+                },
                 "images": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -52,7 +65,7 @@ TOOLS_METADATA = {
                     "default": True,
                 },
             },
-            "required": ["title", "content"],
+            "required": ["title"],
         },
     },
     # NOTE: 글 삭제 기능은 일단 비활성화 (필요시 추후 구현)
@@ -100,7 +113,8 @@ def get_tools_list() -> list[dict]:
 async def handle_create_post(
     page: Page,
     title: str,
-    content: str,
+    content: Optional[str] = None,
+    blocks: Optional[list[dict]] = None,
     category: Optional[str] = None,
     tags: Optional[list[str]] = None,
     images: Optional[list[str]] = None,
@@ -132,6 +146,15 @@ async def handle_create_post(
         UploadError: 이미지 업로드 실패 시
     """
     try:
+        # blocks가 주어지면 v2(순서형) 경로 사용 — 임시저장 지원
+        if blocks is not None:
+            from ..automation.post_actions import create_blog_post_v2
+            result = await create_blog_post_v2(
+                page, title=title, blocks=blocks, tags=tags, publish=publish
+            )
+            result.setdefault("images_uploaded", sum(1 for b in blocks if b.get("type") == "image"))
+            return result
+
         logger.info(f"글 작성 시작: {title}")
         images_uploaded = 0
 
