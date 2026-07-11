@@ -56,18 +56,29 @@ async def dismiss_cascading_alerts(page: Page, frame: FrameLocator) -> None:
 
 
 async def dismiss_help_panel(page: Page, frame: FrameLocator) -> None:
-    """저장 버튼을 가릴 수 있는 도움말 사이드 패널을 닫기 버튼→Escape 순으로 닫는다."""
+    """저장 버튼을 가릴 수 있는 도움말 사이드 패널을 닫는다.
+
+    도움말 헤더(se-help-header)가 닫기 버튼 위에 겹쳐 포인터 이벤트를 가로채므로
+    일반 click()은 30초간 재시도만 하다 실패한다(실계정 확인). 그래서 닫기 버튼에
+    click 이벤트를 직접 디스패치해 가로채기를 우회하고, Escape도 함께 시도한다.
+    닫지 못하더라도 여기서 멈추지 않고(예외 없이) 반환해 저장 시도로 넘어간다."""
     help_title = frame.locator(".se-help-title").first
     if not await is_visible(help_title, timeout=2000):
         return
     close_button = frame.get_by_role("button", name="닫기").first
-    if await is_visible(close_button, timeout=2000):
-        await close_button.click()
-        return
-    try:
-        await page.keyboard.press("Escape")
-    except Exception:
-        pass
+    for _ in range(3):
+        try:
+            if await is_visible(close_button, timeout=1000):
+                # 포인터 가로채기를 우회하려 좌표 클릭 대신 click 이벤트를 직접 발사한다.
+                await close_button.dispatch_event("click")
+        except Exception:
+            pass
+        try:
+            await page.keyboard.press("Escape")
+        except Exception:
+            pass
+        if not await is_visible(help_title, timeout=1000):
+            return
 
 
 async def click_resilient(page: Page, frame: FrameLocator, locator: Locator) -> None:
