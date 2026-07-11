@@ -8,8 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+.venv*/
 venv/
 env/
+
+# 로컬 테스트 픽스처 이미지 (라이브 검증용, 레포에 커밋하지 않음)
+tests/fixtures/
 
 # Playwright 관련
 playwright-state/
