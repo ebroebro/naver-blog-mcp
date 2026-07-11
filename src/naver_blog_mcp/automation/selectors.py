@@ -101,3 +101,12 @@ POST_WRITE_CONTENT_BODY = NaverSelectors.POST_WRITE["content_body"]
 POST_WRITE_PUBLISH_BTN = NaverSelectors.POST_WRITE["publish_btn"]
 POST_WRITE_CATEGORY_BTN = NaverSelectors.POST_WRITE["category_select"]
 POST_WRITE_TAG_INPUT = NaverSelectors.POST_WRITE["tag_input"]
+
+# ── postToNaver.ts에서 실계정 검증된 셀렉터 (스마트에디터 ONE) ──────────────
+MAIN_FRAME = "#mainFrame"
+TITLE_PARAGRAPH = ".se-title-text .se-text-paragraph"
+BODY_FIRST_PARAGRAPH = ".se-component.se-text .se-text-paragraph"
+SAVE_DRAFT_BTN_NAME = "저장"   # role=button, 임시저장
+PHOTO_BTN_NAME = "사진"        # role=button, 이미지 삽입
+HELP_TITLE = ".se-help-title"  # 저장 버튼을 가릴 수 있는 도움말 패널
+GO_BLOG_WRITE_URL = "https://blog.naver.com/GoBlogWrite.naver"
