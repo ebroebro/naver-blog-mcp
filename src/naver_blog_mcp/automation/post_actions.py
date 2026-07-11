@@ -16,6 +16,17 @@ from .selectors import (
     POST_WRITE_TAG_INPUT,
 )
 
+from . import selectors as sel
+from .editor_helpers import (
+    is_visible,
+    paste_into_focused,
+    dismiss_continue_draft_popup,
+    dismiss_cascading_alerts,
+    dismiss_help_panel,
+    click_resilient,
+    clear_and_focus,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -589,6 +600,106 @@ async def create_blog_post(
         result["title"] = title
         return result
 
+    except NaverBlogPostError:
+        raise
+    except Exception as e:
+        raise NaverBlogPostError(f"글 작성 중 오류: {str(e)}")
+
+
+# ============================================================================
+# v2: blocks 기반 작성 (postToNaver.ts 패리티) — 임시저장 지원
+# ============================================================================
+
+
+async def _fill_title_v2(page: Page, frame, title: str) -> None:
+    title_field = frame.locator(sel.TITLE_PARAGRAPH).first
+    # 콜드 컨텍스트에서 에디터 iframe 번들이 30초 넘게 걸릴 수 있어 넉넉히 대기.
+    await title_field.wait_for(state="visible", timeout=60000)
+    await clear_and_focus(page, frame, title_field)
+    await paste_into_focused(page, title)
+
+
+async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
+    async with page.expect_file_chooser() as fc_info:
+        await click_resilient(page, frame, frame.get_by_role("button", name=sel.PHOTO_BTN_NAME))
+        file_chooser = await fc_info.value
+    await file_chooser.set_files(image_path)
+    await page.wait_for_timeout(1500)
+    await page.keyboard.press("Enter")
+
+
+async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
+    body_field = frame.locator(sel.BODY_FIRST_PARAGRAPH).first
+    await clear_and_focus(page, frame, body_field)
+    for block in blocks:
+        if block.get("type") == "text":
+            text = block.get("text", "")
+            if not text.strip():
+                continue
+            await paste_into_focused(page, text)
+            await page.keyboard.press("Enter")
+        elif block.get("type") == "image":
+            path = block.get("path")
+            if not path:
+                continue
+            await _insert_image_at_cursor(page, frame, path)
+
+
+async def _append_tags_v2(page: Page, tags) -> None:
+    if not tags:
+        return
+    await paste_into_focused(page, " ".join(tags))
+
+
+async def _save_draft_v2(page: Page, frame) -> None:
+    draft_button = frame.get_by_role("button", name=sel.SAVE_DRAFT_BTN_NAME).first
+    # 타이핑 중 자동저장으로 "이어서 작성" 팝업이 저장 직전 다시 뜰 수 있어 재정리.
+    await dismiss_continue_draft_popup(page)
+    await dismiss_cascading_alerts(page, frame)
+    await dismiss_help_panel(page, frame)
+    await click_resilient(page, frame, draft_button)
+    await page.wait_for_timeout(2000)
+
+
+async def create_blog_post_v2(
+    page: Page,
+    *,
+    title: str,
+    blocks: list[dict],
+    tags: list[str] | None = None,
+    publish: bool = False,
+) -> Dict[str, Any]:
+    """blocks(텍스트/이미지 순서열)로 글을 작성한다. publish=False면 임시저장.
+
+    Returns: {"success": bool, "message": str, "post_url": str | None, "title": str}
+    """
+    try:
+        await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
+        if "nid.naver.com" in page.url:
+            raise NaverBlogPostError(
+                "로그인 세션이 만료되었거나 CAPTCHA가 필요합니다. HEADLESS=false로 재시도하세요."
+            )
+
+        frame = page.frame_locator(sel.MAIN_FRAME)
+        await dismiss_continue_draft_popup(page)
+        await dismiss_cascading_alerts(page, frame)
+
+        await _fill_title_v2(page, frame, title)
+        await _fill_body_v2(page, frame, blocks)
+        await _append_tags_v2(page, tags)
+
+        if publish:
+            result = await publish_post(page, wait_for_completion=False)
+            result["title"] = title
+            return result
+
+        await _save_draft_v2(page, frame)
+        return {
+            "success": True,
+            "message": "임시저장 완료",
+            "post_url": None,
+            "title": title,
+        }
     except NaverBlogPostError:
         raise
     except Exception as e:
