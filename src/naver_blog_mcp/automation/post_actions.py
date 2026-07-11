@@ -18,7 +18,6 @@ from .selectors import (
 
 from . import selectors as sel
 from .editor_helpers import (
-    is_visible,
     paste_into_focused,
     dismiss_continue_draft_popup,
     dismiss_cascading_alerts,

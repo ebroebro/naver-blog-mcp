@@ -146,6 +146,17 @@ async def handle_create_post(
         UploadError: 이미지 업로드 실패 시
     """
     try:
+        images_uploaded = 0
+
+        if content is None and blocks is None:
+            return {
+                "success": False,
+                "message": "content 또는 blocks 중 하나는 필요합니다.",
+                "post_url": None,
+                "title": title,
+                "images_uploaded": 0,
+            }
+
         # blocks가 주어지면 v2(순서형) 경로 사용 — 임시저장 지원
         if blocks is not None:
             from ..automation.post_actions import create_blog_post_v2
@@ -156,7 +167,6 @@ async def handle_create_post(
             return result
 
         logger.info(f"글 작성 시작: {title}")
-        images_uploaded = 0
 
         # 1. 이미지 업로드 (본문 작성 전)
         if images:
