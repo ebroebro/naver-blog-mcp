@@ -111,7 +111,10 @@ PHOTO_BTN_NAME = "사진"        # role=button, 이미지 삽입
 HELP_TITLE = ".se-help-title"  # 저장 버튼을 가릴 수 있는 도움말 패널
 GO_BLOG_WRITE_URL = "https://blog.naver.com/GoBlogWrite.naver"
 
-# 구분선(수평선) — 스마트에디터 ONE 툴바 버튼. 정확한 값은 라이브 확인(T4).
-DIVIDER_BTN_NAME = "구분선"
-# 구분선 클릭 시 선 스타일 팝업이 뜨면 첫 스타일을 선택. 없으면 무시.
+# 구분선(수평선) — 스마트에디터 ONE 툴바 버튼(라이브 확정).
+# 툴바에 "구분선 추가"(기본 삽입, data-value=default)와 "구분선 선택"(스타일 드롭다운)
+# 두 버튼이 있어 name="구분선"은 strict 위반이 난다. 기본 삽입 버튼만 정확히 지정한다.
+DIVIDER_BTN_NAME = "구분선 추가"
+# "구분선 추가"는 클릭 즉시 기본 구분선을 삽입하므로 보통 스타일 팝업이 없다.
+# 혹시 스타일 팝업이 뜨는 변형 대비용(있으면 첫 스타일 선택, 없으면 자동 스킵).
 DIVIDER_STYLE_ITEM = ".se-horizontal-line-popup-container button, .se-toolbar-option-horizontal-line button"
