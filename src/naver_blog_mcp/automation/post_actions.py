@@ -18,6 +18,7 @@ from .selectors import (
 
 from . import selectors as sel
 from .editor_helpers import (
+    is_visible,
     paste_into_focused,
     dismiss_continue_draft_popup,
     dismiss_cascading_alerts,
@@ -627,6 +628,17 @@ async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
     await page.keyboard.press("Enter")
 
 
+async def _insert_divider_at_cursor(page: Page, frame) -> None:
+    """캐럿 위치에 스마트에디터 구분선(수평선) 컴포넌트를 삽입한다.
+    구분선 버튼 클릭 후 스타일 선택 팝업이 뜨면 첫 스타일을 고른다(없으면 무시)."""
+    await click_resilient(page, frame, frame.get_by_role("button", name=sel.DIVIDER_BTN_NAME))
+    await page.wait_for_timeout(500)
+    style = frame.locator(sel.DIVIDER_STYLE_ITEM).first
+    if await is_visible(style, timeout=1500):
+        await style.click()
+    await page.wait_for_timeout(500)
+
+
 async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
     body_field = frame.locator(sel.BODY_FIRST_PARAGRAPH).first
     await clear_and_focus(page, frame, body_field)
@@ -642,6 +654,8 @@ async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
             if not path:
                 continue
             await _insert_image_at_cursor(page, frame, path)
+        elif block.get("type") == "divider":
+            await _insert_divider_at_cursor(page, frame)
 
 
 async def _append_tags_v2(page: Page, tags) -> None:

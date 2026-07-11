@@ -47,7 +47,7 @@ TOOLS_METADATA = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "type": {"type": "string", "enum": ["text", "image"]},
+                            "type": {"type": "string", "enum": ["text", "image", "divider"]},
                             "text": {"type": "string", "description": "type=text일 때 본문 텍스트"},
                             "path": {"type": "string", "description": "type=image일 때 이미지 파일 경로"},
                         },

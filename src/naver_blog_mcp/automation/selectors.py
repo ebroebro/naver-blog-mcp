@@ -110,3 +110,8 @@ SAVE_DRAFT_BTN_NAME = "저장"   # role=button, 임시저장
 PHOTO_BTN_NAME = "사진"        # role=button, 이미지 삽입
 HELP_TITLE = ".se-help-title"  # 저장 버튼을 가릴 수 있는 도움말 패널
 GO_BLOG_WRITE_URL = "https://blog.naver.com/GoBlogWrite.naver"
+
+# 구분선(수평선) — 스마트에디터 ONE 툴바 버튼. 정확한 값은 라이브 확인(T4).
+DIVIDER_BTN_NAME = "구분선"
+# 구분선 클릭 시 선 스타일 팝업이 뜨면 첫 스타일을 선택. 없으면 무시.
+DIVIDER_STYLE_ITEM = ".se-horizontal-line-popup-container button, .se-toolbar-option-horizontal-line button"
