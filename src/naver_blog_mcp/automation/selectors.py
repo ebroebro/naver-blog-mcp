@@ -115,6 +115,9 @@ GO_BLOG_WRITE_URL = "https://blog.naver.com/GoBlogWrite.naver"
 # 툴바에 "구분선 추가"(기본 삽입, data-value=default)와 "구분선 선택"(스타일 드롭다운)
 # 두 버튼이 있어 name="구분선"은 strict 위반이 난다. 기본 삽입 버튼만 정확히 지정한다.
 DIVIDER_BTN_NAME = "구분선 추가"
+# role 이름은 "구분선 추가"/"구분선 선택" 충돌 위험이 있어, 기본 삽입 버튼은 유일한
+# CSS 클래스로 지정한다(라이브 DOM 확인: data-value=default, data-log=dot.horizt).
+DIVIDER_BTN_CSS = ".se-insert-horizontal-line-default-toolbar-button"
 # "구분선 추가"는 클릭 즉시 기본 구분선을 삽입하므로 보통 스타일 팝업이 없다.
 # 혹시 스타일 팝업이 뜨는 변형 대비용(있으면 첫 스타일 선택, 없으면 자동 스킵).
 DIVIDER_STYLE_ITEM = ".se-horizontal-line-popup-container button, .se-toolbar-option-horizontal-line button"

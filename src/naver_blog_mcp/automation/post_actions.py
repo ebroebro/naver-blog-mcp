@@ -631,7 +631,7 @@ async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
 async def _insert_divider_at_cursor(page: Page, frame) -> None:
     """캐럿 위치에 스마트에디터 구분선(수평선) 컴포넌트를 삽입한다.
     구분선 버튼 클릭 후 스타일 선택 팝업이 뜨면 첫 스타일을 고른다(없으면 무시)."""
-    await click_resilient(page, frame, frame.get_by_role("button", name=sel.DIVIDER_BTN_NAME))
+    await click_resilient(page, frame, frame.locator(sel.DIVIDER_BTN_CSS).first)
     await page.wait_for_timeout(500)
     style = frame.locator(sel.DIVIDER_STYLE_ITEM).first
     if await is_visible(style, timeout=1500):
