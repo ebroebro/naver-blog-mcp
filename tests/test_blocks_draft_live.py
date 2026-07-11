@@ -17,9 +17,12 @@ async def main():
     # 검증용 이미지 1장 준비 (없으면 경로만 바꿔서 실행)
     sample = Path(__file__).parent / "fixtures" / "sample.jpg"
     blocks = [
-        {"type": "text", "text": "첫 문단입니다."},
+        {"type": "text", "text": "첫 문단입니다. 부드러운 톤 테스트 🙂"},
+        {"type": "divider"},
         {"type": "image", "path": str(sample)},
         {"type": "text", "text": "이미지 다음 문단입니다."},
+        {"type": "divider"},
+        {"type": "text", "text": "마지막 문단, 총평입니다."},
     ]
 
     server = NaverBlogMCPServer()
