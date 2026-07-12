@@ -118,6 +118,9 @@ DIVIDER_BTN_NAME = "구분선 추가"
 # role 이름은 "구분선 추가"/"구분선 선택" 충돌 위험이 있어, 기본 삽입 버튼은 유일한
 # CSS 클래스로 지정한다(라이브 DOM 확인: data-value=default, data-log=dot.horizt).
 DIVIDER_BTN_CSS = ".se-insert-horizontal-line-default-toolbar-button"
-# "구분선 추가"는 클릭 즉시 기본 구분선을 삽입하므로 보통 스타일 팝업이 없다.
-# 혹시 스타일 팝업이 뜨는 변형 대비용(있으면 첫 스타일 선택, 없으면 자동 스킵).
-DIVIDER_STYLE_ITEM = ".se-horizontal-line-popup-container button, .se-toolbar-option-horizontal-line button"
+# 구분선2 스타일을 쓰려면 "구분선 선택" 드롭다운을 열고 2번째 스타일을 고른다.
+# 드롭다운 버튼(라이브 DOM 확인): aria-haspopup, data-name='horizontal-line'.
+DIVIDER_SELECT_BTN_CSS = ".se-document-toolbar-select-option-button[data-name='horizontal-line']"
+# 드롭다운 팝업 안의 구분선2 옵션 — 이름 우선, 실패 시 옵션 목록 2번째(nth(1))로 폴백.
+DIVIDER_STYLE2_NAME = "구분선2"
+DIVIDER_STYLE_OPTIONS = ".se-toolbar-select-option-list button, .se-toolbar-option-horizontal-line button"

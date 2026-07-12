@@ -629,13 +629,31 @@ async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
 
 
 async def _insert_divider_at_cursor(page: Page, frame) -> None:
-    """캐럿 위치에 스마트에디터 구분선(수평선) 컴포넌트를 삽입한다.
-    구분선 버튼 클릭 후 스타일 선택 팝업이 뜨면 첫 스타일을 고른다(없으면 무시)."""
-    await click_resilient(page, frame, frame.locator(sel.DIVIDER_BTN_CSS).first)
-    await page.wait_for_timeout(500)
-    style = frame.locator(sel.DIVIDER_STYLE_ITEM).first
-    if await is_visible(style, timeout=1500):
-        await style.click()
+    """캐럿 위치에 스마트에디터 '구분선2' 스타일 수평선을 삽입한다.
+    '구분선 선택' 드롭다운을 열고 두 번째 스타일(구분선2)을 고른다. 스타일 선택에
+    실패하면 기본 구분선(구분선1)이라도 삽입해 멈추지 않는다."""
+    # 1) 구분선 스타일 드롭다운 열기
+    await click_resilient(page, frame, frame.locator(sel.DIVIDER_SELECT_BTN_CSS).first)
+    await page.wait_for_timeout(600)
+    picked = False
+    # 2) 이름으로 구분선2 시도
+    by_name = frame.get_by_role("button", name=sel.DIVIDER_STYLE2_NAME).first
+    if await is_visible(by_name, timeout=1500):
+        await by_name.click()
+        picked = True
+    # 3) 이름으로 못 찾으면 팝업 옵션 목록의 2번째
+    if not picked:
+        opt2 = frame.locator(sel.DIVIDER_STYLE_OPTIONS).nth(1)
+        if await is_visible(opt2, timeout=1500):
+            await opt2.click()
+            picked = True
+    # 4) 그래도 실패하면 기본 구분선(구분선1) 폴백
+    if not picked:
+        try:
+            await page.keyboard.press("Escape")
+        except Exception:
+            pass
+        await click_resilient(page, frame, frame.locator(sel.DIVIDER_BTN_CSS).first)
     await page.wait_for_timeout(500)
 
 
