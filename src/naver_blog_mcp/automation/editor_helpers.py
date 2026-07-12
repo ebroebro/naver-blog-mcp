@@ -65,6 +65,25 @@ async def dismiss_continue_draft_popup(page: Page) -> bool:
     return True
 
 
+async def wait_and_dismiss_continue_draft_popup(page: Page, timeout_ms: int = 8000) -> bool:
+    """dismiss_continue_draft_popup을 짧은 간격으로 반복 호출해, 네비게이션 직후
+    "이어서 작성" 팝업이 늦게 렌더링되는 경우까지 폭넓게 잡아낸다.
+
+    dismiss_continue_draft_popup 자체는 빠른 판정(최대 ~3.5초)을 위해 짧은 타임아웃을
+    쓰는데, 방금 수동 로그인을 마친 직후처럼 페이지가 콜드 상태면 팝업이 그보다 늦게
+    뜨는 경우가 실계정에서 확인됐다(취소를 못 누르고 그대로 "이어쓰기" 상태로 진행돼
+    이전 임시저장 글을 덮어씀). 이 함수는 전체 예산(timeout_ms) 안에서 짧은 간격으로
+    재확인해, 늦게 뜬 팝업도 놓치지 않는다.
+
+    Returns: 팝업을 발견해 취소했으면 True, 예산 안에 끝내 안 뜨면 False."""
+    deadline_checks = max(1, timeout_ms // 500)
+    for _ in range(deadline_checks):
+        if await dismiss_continue_draft_popup(page):
+            return True
+        await page.wait_for_timeout(500)
+    return False
+
+
 async def dismiss_cascading_alerts(page: Page, frame: FrameLocator) -> None:
     """se-popup-alert-confirm류 연쇄 "확인" 팝업을 page/frame 양쪽에서 더 없을 때까지 정리."""
     for _ in range(3):

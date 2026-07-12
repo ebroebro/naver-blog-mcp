@@ -21,6 +21,7 @@ from .editor_helpers import (
     is_visible,
     paste_into_focused,
     dismiss_continue_draft_popup,
+    wait_and_dismiss_continue_draft_popup,
     dismiss_cascading_alerts,
     dismiss_help_panel,
     click_resilient,
@@ -746,9 +747,13 @@ async def _ensure_fresh_editor(page: Page) -> None:
 
     "취소"는 팝업 질문만 닫을 뿐, 이미 렌더링된 이전 글 내용(제목·본문 여러 블록)까지
     지워준다는 보장이 없음이 실계정에서 확인됐다(제목이 이전 글과 겹쳐 저장됨). 팝업을
-    취소한 뒤 페이지를 새로 불러오면 이전 내용이 없는 진짜 새 에디터로 시작한다."""
+    취소한 뒤 페이지를 새로 불러오면 이전 내용이 없는 진짜 새 에디터로 시작한다.
+
+    방금 수동 로그인을 마친 직후처럼 콜드 상태에서는 이 팝업이 늦게(수 초 뒤) 렌더링될
+    수 있어(실계정 확인: 짧은 판정 때문에 놓쳐서 "이어쓰기" 상태로 진행돼 이전 임시저장
+    글을 그대로 덮어씀), 매 시도마다 넉넉한 예산으로 폭넓게 재확인한다."""
     for _ in range(3):
-        dismissed = await dismiss_continue_draft_popup(page)
+        dismissed = await wait_and_dismiss_continue_draft_popup(page)
         if not dismissed:
             return
         logger.info("'이어서 작성' 팝업 취소 — 새 에디터로 다시 불러옵니다.")
