@@ -626,7 +626,11 @@ async def _fill_title_v2(page: Page, frame, title: str) -> None:
     # 한 번 더 지우고 다시 입력한다(자가치유).
     await page.wait_for_timeout(300)
     actual = (await title_field.inner_text()).strip()
-    if actual != title.strip():
+    # 에디터가 일반 공백을 렌더링 시 \xa0(줄바꿈방지 공백)로 정규화하는 경우가 있어
+    # (실계정 확인: 내용은 동일한데 공백 문자만 달라 겹침으로 오판·불필요 재입력이
+    # 발생했었다), 공백 종류 차이는 무시하고 비교한다.
+    normalize = lambda s: " ".join(s.split())
+    if normalize(actual) != normalize(title):
         logger.warning(f"제목이 예상과 다름(겹침 의심) — 재입력합니다. actual={actual!r}")
         await clear_and_focus(page, frame, title_field)
         await paste_into_focused(page, title)
