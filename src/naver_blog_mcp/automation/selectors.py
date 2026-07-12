@@ -121,6 +121,6 @@ DIVIDER_BTN_CSS = ".se-insert-horizontal-line-default-toolbar-button"
 # 구분선2 스타일을 쓰려면 "구분선 선택" 드롭다운을 열고 2번째 스타일을 고른다.
 # 드롭다운 버튼(라이브 DOM 확인): aria-haspopup, data-name='horizontal-line'.
 DIVIDER_SELECT_BTN_CSS = ".se-document-toolbar-select-option-button[data-name='horizontal-line']"
-# 드롭다운 팝업 안의 구분선2 옵션 — 이름 우선, 실패 시 옵션 목록 2번째(nth(1))로 폴백.
-DIVIDER_STYLE2_NAME = "구분선2"
-DIVIDER_STYLE_OPTIONS = ".se-toolbar-select-option-list button, .se-toolbar-option-horizontal-line button"
+# 드롭다운 팝업 안 "구분선 2" 옵션 (라이브 DOM 확인: text='구분선 2', data-value='line1',
+# 유일 CSS 클래스). 참고로 '구분선 1'=default, '구분선 3'=line2 … 순.
+DIVIDER_STYLE2_CSS = ".se-toolbar-option-insert-horizontal-line-line1-button"

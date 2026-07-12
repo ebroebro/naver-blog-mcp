@@ -635,20 +635,12 @@ async def _insert_divider_at_cursor(page: Page, frame) -> None:
     # 1) 구분선 스타일 드롭다운 열기
     await click_resilient(page, frame, frame.locator(sel.DIVIDER_SELECT_BTN_CSS).first)
     await page.wait_for_timeout(600)
-    picked = False
-    # 2) 이름으로 구분선2 시도
-    by_name = frame.get_by_role("button", name=sel.DIVIDER_STYLE2_NAME).first
-    if await is_visible(by_name, timeout=1500):
-        await by_name.click()
-        picked = True
-    # 3) 이름으로 못 찾으면 팝업 옵션 목록의 2번째
-    if not picked:
-        opt2 = frame.locator(sel.DIVIDER_STYLE_OPTIONS).nth(1)
-        if await is_visible(opt2, timeout=1500):
-            await opt2.click()
-            picked = True
-    # 4) 그래도 실패하면 기본 구분선(구분선1) 폴백
-    if not picked:
+    # 2) "구분선 2" 스타일 선택 (유일 CSS 클래스)
+    opt2 = frame.locator(sel.DIVIDER_STYLE2_CSS).first
+    if await is_visible(opt2, timeout=2000):
+        await click_resilient(page, frame, opt2)
+    else:
+        # 3) 옵션을 못 찾으면 기본 구분선(구분선1) 폴백 — 멈추지 않는다
         try:
             await page.keyboard.press("Escape")
         except Exception:
