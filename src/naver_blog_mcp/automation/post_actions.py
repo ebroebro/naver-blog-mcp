@@ -692,6 +692,33 @@ async def _save_draft_v2(page: Page, frame) -> None:
     await page.wait_for_timeout(2000)
 
 
+async def _ensure_write_page(page: Page) -> None:
+    """글쓰기 페이지로 이동한다. nid.naver.com(로그인)으로 튕기면 세션 적용/수동 로그인을
+    최대 3분간 기다렸다가 다시 이동한다. HEADLESS=false면 열린 브라우저에서 직접
+    로그인/CAPTCHA를 풀 수 있다(원래 postToNaver.ts의 로그인 재시도 동작 이식)."""
+    await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
+    if "nid.naver.com" not in page.url:
+        return
+    deadline = asyncio.get_event_loop().time() + 180
+    while "nid.naver.com" in page.url:
+        if asyncio.get_event_loop().time() > deadline:
+            raise NaverBlogPostError(
+                "로그인 페이지에서 벗어나지 못했습니다(세션 만료/CAPTCHA). "
+                "열린 브라우저에서 직접 로그인한 뒤 다시 실행하세요."
+            )
+        await page.wait_for_timeout(2000)
+    # 로그인을 벗어났으면 글쓰기 페이지로 다시 이동
+    await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
+    if "nid.naver.com" in page.url:
+        raise NaverBlogPostError("로그인 후에도 글쓰기 페이지 진입에 실패했습니다.")
+    # 다음 실행에서 재사용하도록 세션 저장(best-effort)
+    try:
+        from ..config import config
+        await page.context.storage_state(path=config.SESSION_STORAGE_PATH)
+    except Exception:
+        pass
+
+
 async def create_blog_post_v2(
     page: Page,
     *,
@@ -705,11 +732,7 @@ async def create_blog_post_v2(
     Returns: {"success": bool, "message": str, "post_url": str | None, "title": str}
     """
     try:
-        await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
-        if "nid.naver.com" in page.url:
-            raise NaverBlogPostError(
-                "로그인 세션이 만료되었거나 CAPTCHA가 필요합니다. HEADLESS=false로 재시도하세요."
-            )
+        await _ensure_write_page(page)
 
         frame = page.frame_locator(sel.MAIN_FRAME)
         await dismiss_continue_draft_popup(page)
