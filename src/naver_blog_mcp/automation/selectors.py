@@ -114,9 +114,8 @@ GO_BLOG_WRITE_URL = "https://blog.naver.com/GoBlogWrite.naver"
 # 구분선(수평선) — 스마트에디터 ONE 툴바 버튼(라이브 확정).
 # 툴바에 "구분선 추가"(기본 삽입, data-value=default)와 "구분선 선택"(스타일 드롭다운)
 # 두 버튼이 있어 name="구분선"은 strict 위반이 난다. 기본 삽입 버튼만 정확히 지정한다.
-DIVIDER_BTN_NAME = "구분선 추가"
-# role 이름은 "구분선 추가"/"구분선 선택" 충돌 위험이 있어, 기본 삽입 버튼은 유일한
-# CSS 클래스로 지정한다(라이브 DOM 확인: data-value=default, data-log=dot.horizt).
+# role 이름("구분선 추가"/"구분선 선택")은 충돌 위험이 있어 유일한 CSS 클래스로 지정한다.
+# 기본(구분선1) 삽입 버튼 (라이브 DOM 확인: data-value=default, data-log=dot.horizt).
 DIVIDER_BTN_CSS = ".se-insert-horizontal-line-default-toolbar-button"
 # 구분선2 스타일을 쓰려면 "구분선 선택" 드롭다운을 열고 2번째 스타일을 고른다.
 # 드롭다운 버튼(라이브 DOM 확인): aria-haspopup, data-name='horizontal-line'.

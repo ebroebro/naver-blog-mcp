@@ -629,24 +629,29 @@ async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
 
 
 async def _insert_divider_at_cursor(page: Page, frame) -> None:
-    """캐럿 위치에 스마트에디터 '구분선2' 스타일 수평선을 삽입한다.
-    '구분선 선택' 드롭다운을 열고 두 번째 스타일(구분선2)을 고른다. 스타일 선택에
-    실패하면 기본 구분선(구분선1)이라도 삽입해 멈추지 않는다."""
-    # 1) 구분선 스타일 드롭다운 열기
-    await click_resilient(page, frame, frame.locator(sel.DIVIDER_SELECT_BTN_CSS).first)
-    await page.wait_for_timeout(600)
-    # 2) "구분선 2" 스타일 선택 (유일 CSS 클래스)
-    opt2 = frame.locator(sel.DIVIDER_STYLE2_CSS).first
-    if await is_visible(opt2, timeout=2000):
-        await click_resilient(page, frame, opt2)
-    else:
-        # 3) 옵션을 못 찾으면 기본 구분선(구분선1) 폴백 — 멈추지 않는다
-        try:
-            await page.keyboard.press("Escape")
-        except Exception:
-            pass
-        await click_resilient(page, frame, frame.locator(sel.DIVIDER_BTN_CSS).first)
-    await page.wait_for_timeout(500)
+    """캐럿 위치에 스마트에디터 '구분선 2' 스타일 수평선을 삽입한다(best-effort).
+
+    '구분선 선택' 드롭다운을 열고 '구분선 2'를 고른다. 옵션을 못 찾으면 기본 구분선을,
+    그마저도 실패하면(예: 드롭다운이 계속 막힘) 구분선은 장식이므로 예외를 던지지 않고
+    건너뛴다 — 글 작성 자체는 계속된다."""
+    try:
+        # 1) 구분선 스타일 드롭다운 열기
+        await click_resilient(page, frame, frame.locator(sel.DIVIDER_SELECT_BTN_CSS).first)
+        await page.wait_for_timeout(600)
+        # 2) "구분선 2" 스타일 선택 (유일 CSS 클래스)
+        opt2 = frame.locator(sel.DIVIDER_STYLE2_CSS).first
+        if await is_visible(opt2, timeout=2000):
+            await click_resilient(page, frame, opt2)
+        else:
+            # 3) 옵션을 못 찾으면 기본 구분선(구분선1) 폴백
+            try:
+                await page.keyboard.press("Escape")
+            except Exception:
+                pass
+            await click_resilient(page, frame, frame.locator(sel.DIVIDER_BTN_CSS).first)
+        await page.wait_for_timeout(500)
+    except Exception as e:
+        logger.warning(f"구분선 삽입 실패 — 건너뜁니다: {e}")
 
 
 async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
@@ -691,9 +696,9 @@ async def _ensure_write_page(page: Page) -> None:
     await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
     if "nid.naver.com" not in page.url:
         return
-    deadline = asyncio.get_event_loop().time() + 180
+    deadline = asyncio.get_running_loop().time() + 180
     while "nid.naver.com" in page.url:
-        if asyncio.get_event_loop().time() > deadline:
+        if asyncio.get_running_loop().time() > deadline:
             raise NaverBlogPostError(
                 "로그인 페이지에서 벗어나지 못했습니다(세션 만료/CAPTCHA). "
                 "열린 브라우저에서 직접 로그인한 뒤 다시 실행하세요."
