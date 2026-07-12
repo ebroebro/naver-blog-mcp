@@ -37,12 +37,26 @@ async def dismiss_popup_button(scope, name: str) -> bool:
 
 
 async def dismiss_continue_draft_popup(page: Page) -> None:
-    """"이어서 작성" 팝업의 취소를 눌러 새 글로 시작. 이 팝업은 #mainFrame 밖(page 최상단)에 뜬다."""
-    if await dismiss_popup_button(page, "취소"):
+    """"이어서 작성" 팝업의 취소를 눌러 새 글로 시작(이어쓰기를 절대 선택하지 않는다).
+    이 팝업은 #mainFrame 밖(page 최상단)에 뜬다. 취소를 클릭한 뒤에는 팝업이 실제로
+    사라졌는지 확인해, 클릭이 씹혀 "이어쓰기" 상태로 남는 일을 방지한다."""
+    button = page.get_by_role("button", name="취소", exact=True).first
+    clicked = await dismiss_popup_button(page, "취소")
+    if not clicked:
+        by_text = page.get_by_text("취소", exact=True).first
+        if await is_visible(by_text, timeout=2000):
+            await by_text.click()
+            button = by_text
+            clicked = True
+    if not clicked:
         return
-    by_text = page.get_by_text("취소", exact=True).first
-    if await is_visible(by_text, timeout=2000):
-        await by_text.click()
+    # 취소 클릭 후 팝업이 실제로 닫혔는지 확인(안 닫혔으면 한 번 더 시도)
+    if await is_visible(button, timeout=1500):
+        logger.warning("'이어서 작성' 팝업의 취소 클릭이 반영되지 않아 재시도합니다.")
+        try:
+            await button.click()
+        except Exception:
+            pass
 
 
 async def dismiss_cascading_alerts(page: Page, frame: FrameLocator) -> None:

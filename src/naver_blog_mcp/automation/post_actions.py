@@ -615,12 +615,32 @@ async def _fill_title_v2(page: Page, frame, title: str) -> None:
     title_field = frame.locator(sel.TITLE_PARAGRAPH).first
     # 콜드 컨텍스트에서 에디터 iframe 번들이 30초 넘게 걸릴 수 있어 넉넉히 대기.
     await title_field.wait_for(state="visible", timeout=60000)
+    # "이어서 작성" 팝업 취소 후에도, 에디터 자체의 임시저장 복원이 비동기로 뒤늦게
+    # 끼어들어 이전 글 제목과 겹치는 경우가 실계정에서 확인됐다. 잠깐 정착을 기다리고
+    # 팝업을 한 번 더 정리한 뒤 입력한다.
+    await page.wait_for_timeout(1200)
+    await dismiss_continue_draft_popup(page)
     await clear_and_focus(page, frame, title_field)
     await paste_into_focused(page, title)
+    # 이전 글 제목이 뒤늦게 끼어들어 겹치는 경우를 대비해 결과를 검증하고, 다르면
+    # 한 번 더 지우고 다시 입력한다(자가치유).
+    await page.wait_for_timeout(300)
+    actual = (await title_field.inner_text()).strip()
+    if actual != title.strip():
+        logger.warning(f"제목이 예상과 다름(겹침 의심) — 재입력합니다. actual={actual!r}")
+        await clear_and_focus(page, frame, title_field)
+        await paste_into_focused(page, title)
 
 
 async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
-    async with page.expect_file_chooser() as fc_info:
+    # expect_file_chooser()의 대기 시계는 진입 시점부터 흐른다. click_resilient가
+    # 팝업 때문에 재시도하면(최대 4회 재시도) 그 시간이 같은 예산을 갉아먹어, 클릭은
+    # 결국 성공해도 파일선택창 이벤트 대기가 먼저 타임아웃되는 문제가 실계정에서
+    # 확인됐다. 그래서 이벤트 대기에 들어가기 전에 팝업을 미리 정리해 클릭이 보통
+    # 한 번에 성공하게 하고, 대기 시계 자체도 넉넉히 늘린다.
+    await dismiss_continue_draft_popup(page)
+    await dismiss_cascading_alerts(page, frame)
+    async with page.expect_file_chooser(timeout=45000) as fc_info:
         await click_resilient(page, frame, frame.get_by_role("button", name=sel.PHOTO_BTN_NAME))
         file_chooser = await fc_info.value
     await file_chooser.set_files(image_path)
