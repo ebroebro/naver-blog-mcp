@@ -82,13 +82,21 @@ async def dismiss_help_panel(page: Page, frame: FrameLocator) -> None:
 
 
 async def click_resilient(page: Page, frame: FrameLocator, locator: Locator) -> None:
-    """클릭이 팝업에 막히면 팝업을 정리하고 한 번 더 시도한다."""
-    try:
-        await locator.click(timeout=8000)
-        return
-    except Exception:
-        await dismiss_cascading_alerts(page, frame)
-        await locator.click(timeout=30000)
+    """클릭이 팝업에 막히면 그때 떠 있는 팝업을 닫고 재시도한다.
+
+    "이어서 작성"(취소)·연쇄 "확인" 팝업은 예측 불가한 시점에 0~여러 번 뜰 수 있어
+    한 번 닫는 것으로는 부족하다. 클릭이 막힐 때마다 팝업을 정리하고 여러 번 재시도한다."""
+    last_err: Exception | None = None
+    for _ in range(4):
+        try:
+            await locator.click(timeout=8000)
+            return
+        except Exception as e:
+            last_err = e
+            await dismiss_continue_draft_popup(page)
+            await dismiss_cascading_alerts(page, frame)
+    if last_err is not None:
+        raise last_err
 
 
 async def clear_and_focus(page: Page, frame: FrameLocator, field: Locator) -> None:
