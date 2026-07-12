@@ -736,6 +736,21 @@ async def _ensure_write_page(page: Page) -> None:
         pass
 
 
+async def _ensure_fresh_editor(page: Page) -> None:
+    """"이어서 작성" 팝업이 뜨면 취소하고, 이전 임시저장 내용이 화면에 남지 않도록
+    글쓰기 페이지를 다시 불러와 완전히 새 에디터로 시작한다.
+
+    "취소"는 팝업 질문만 닫을 뿐, 이미 렌더링된 이전 글 내용(제목·본문 여러 블록)까지
+    지워준다는 보장이 없음이 실계정에서 확인됐다(제목이 이전 글과 겹쳐 저장됨). 팝업을
+    취소한 뒤 페이지를 새로 불러오면 이전 내용이 없는 진짜 새 에디터로 시작한다."""
+    for _ in range(3):
+        dismissed = await dismiss_continue_draft_popup(page)
+        if not dismissed:
+            return
+        logger.info("'이어서 작성' 팝업 취소 — 새 에디터로 다시 불러옵니다.")
+        await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
+
+
 async def create_blog_post_v2(
     page: Page,
     *,
@@ -750,9 +765,9 @@ async def create_blog_post_v2(
     """
     try:
         await _ensure_write_page(page)
+        await _ensure_fresh_editor(page)
 
         frame = page.frame_locator(sel.MAIN_FRAME)
-        await dismiss_continue_draft_popup(page)
         await dismiss_cascading_alerts(page, frame)
 
         await _fill_title_v2(page, frame, title)
