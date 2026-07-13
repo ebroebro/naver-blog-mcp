@@ -125,11 +125,14 @@ DIVIDER_SELECT_BTN_CSS = ".se-document-toolbar-select-option-button[data-name='h
 DIVIDER_STYLE2_CSS = ".se-toolbar-option-insert-horizontal-line-line1-button"
 
 # 인용구 — 구분선과 동일한 툴바 패턴(기본 삽입 버튼 + "인용구 선택" 스타일 드롭다운).
-# 기본 삽입 버튼 클래스는 구분선 때와 같은 DOM에서 이미 확인됨:
-# "se-document-toolbar-icon-select-button se-insert-quotation-default-toolbar-button ...".
-# 드롭다운 버튼 클래스는 구분선의 명명 규칙을 그대로 따른다고 가정(best-guess).
-# 원하는 꺾쇠(모서리 브라켓) 스타일은 실계정 스크린샷으로 확인: 드롭다운 옵션
-# "따옴표/버티컬 라인/말풍선/라인&따옴표/포스트잇/프레임" 중 6번째 "프레임".
+# 기본 삽입 버튼/드롭다운 버튼 클래스는 라이브 DOM 덤프(tests/inspect_quote_popup.py)로
+# 확인됨: "se-document-toolbar-icon-select-button se-insert-quotation-default-toolbar-button ..."
+# / data-name='quotation'.
 QUOTE_BTN_CSS = ".se-insert-quotation-default-toolbar-button"
 QUOTE_SELECT_BTN_CSS = ".se-document-toolbar-select-option-button[data-name='quotation']"
-QUOTE_STYLE_NAME = "프레임"
+# 원하는 꺾쇠(모서리 브라켓) 스타일 옵션 (라이브 DOM 확인: tests/inspect_quote_popup.py).
+# 드롭다운 옵션의 실제 버튼 텍스트는 "인용구 1"~"인용구 6"이라 화면에 보이는 스타일
+# 이름("따옴표/버티컬 라인/말풍선/라인&따옴표/포스트잇/프레임")으로는 못 찾는다
+# (텍스트 매칭이 항상 실패해 기본 스타일로 폴백되던 원인). 실제 구분값은
+# data-value='quotation_corner' (6번째 옵션, 유일 CSS 클래스).
+QUOTE_STYLE_CORNER_CSS = ".se-toolbar-option-insert-quotation-quotation_corner-button"
