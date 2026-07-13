@@ -679,6 +679,31 @@ async def _insert_divider_at_cursor(page: Page, frame) -> None:
         logger.warning(f"구분선 삽입 실패 — 건너뜁니다: {e}")
 
 
+async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
+    """캐럿 위치에 스마트에디터 인용구 컴포넌트를 삽입하고 그 안에 text를 채운다
+    (여러 줄이면 줄마다 Enter로 구분해 붙여넣는다).
+
+    정확히 어떤 인용구 스타일(꺾쇠/브라켓 모양)이 몇 번째 옵션인지는 아직 실계정
+    확인 전이라 우선 기본 인용구로 삽입한다 — tests/inspect_quote_popup.py로
+    스타일 목록을 확인하면 구분선2 때처럼 특정 스타일로 좁힐 수 있다. 인용구
+    삽입 자체가 실패해도(버튼을 못 찾는 등) 예외를 던지지 않고 텍스트만 일반
+    문단으로 붙여넣어 내용 손실을 막는다 — 위치 정보는 장식보다 우선이다."""
+    try:
+        await click_resilient(page, frame, frame.locator(sel.QUOTE_BTN_CSS).first)
+        await page.wait_for_timeout(500)
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            if i > 0:
+                await page.keyboard.press("Enter")
+            if line.strip():
+                await paste_into_focused(page, line)
+        await page.wait_for_timeout(300)
+    except Exception as e:
+        logger.warning(f"인용구 삽입 실패 — 일반 텍스트로 대체합니다: {e}")
+        await paste_into_focused(page, text)
+        await page.keyboard.press("Enter")
+
+
 async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
     body_field = frame.locator(sel.BODY_FIRST_PARAGRAPH).first
     await clear_and_focus(page, frame, body_field)
@@ -696,6 +721,10 @@ async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
             await _insert_image_at_cursor(page, frame, path)
         elif block.get("type") == "divider":
             await _insert_divider_at_cursor(page, frame)
+        elif block.get("type") == "quote":
+            text = block.get("text", "")
+            if text.strip():
+                await _insert_quote_at_cursor(page, frame, text)
 
 
 async def _append_tags_v2(page: Page, tags) -> None:
