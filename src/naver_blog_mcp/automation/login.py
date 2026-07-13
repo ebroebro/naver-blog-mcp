@@ -62,8 +62,12 @@ async def login_to_naver(
 
     try:
         # 1. 로그인 페이지로 이동
-        await page.goto("https://nid.naver.com/nidlogin.login", wait_until="networkidle")
-        await asyncio.sleep(1)  # 페이지 로딩 대기
+        # networkidle은 쓰지 않는다 — nid.naver.com은 트래킹/광고 스크립트가 계속
+        # 백그라운드 요청을 보내 네트워크가 완전히 idle 상태가 되지 않는 경우가 있어
+        # 30초 기본 타임아웃을 넘겨버린다(실계정에서 확인). 실제로 필요한 조건인
+        # "아이디 입력창이 나타남"을 직접 기다리는 편이 더 빠르고 신뢰성 있다.
+        await page.goto("https://nid.naver.com/nidlogin.login", wait_until="domcontentloaded")
+        await page.wait_for_selector(LOGIN_ID_INPUT, timeout=30000)
 
         # 2. 아이디 입력
         await page.fill(LOGIN_ID_INPUT, user_id)
