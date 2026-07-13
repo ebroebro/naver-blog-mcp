@@ -127,9 +127,9 @@ DIVIDER_STYLE2_CSS = ".se-toolbar-option-insert-horizontal-line-line1-button"
 # 인용구 — 구분선과 동일한 툴바 패턴(기본 삽입 버튼 + "인용구 선택" 스타일 드롭다운).
 # 기본 삽입 버튼 클래스는 구분선 때와 같은 DOM에서 이미 확인됨:
 # "se-document-toolbar-icon-select-button se-insert-quotation-default-toolbar-button ...".
-# 드롭다운/스타일 옵션 클래스는 구분선의 명명 규칙을 그대로 따른다고 가정한 best-guess이며
-# 검정/회색 꺾쇠(모서리 브라켓) 스타일이 정확히 몇 번째 옵션인지는 라이브 확인이 필요하다
-# (tests/inspect_quote_popup.py 참고).
+# 드롭다운 버튼 클래스는 구분선의 명명 규칙을 그대로 따른다고 가정(best-guess).
+# 원하는 꺾쇠(모서리 브라켓) 스타일은 실계정 스크린샷으로 확인: 드롭다운 옵션
+# "따옴표/버티컬 라인/말풍선/라인&따옴표/포스트잇/프레임" 중 6번째 "프레임".
 QUOTE_BTN_CSS = ".se-insert-quotation-default-toolbar-button"
 QUOTE_SELECT_BTN_CSS = ".se-document-toolbar-select-option-button[data-name='quotation']"
-QUOTE_STYLE_OPTIONS_CSS = "[class*='se-toolbar-option-insert-quotation']"
+QUOTE_STYLE_NAME = "프레임"

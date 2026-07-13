@@ -680,23 +680,52 @@ async def _insert_divider_at_cursor(page: Page, frame) -> None:
 
 
 async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
-    """캐럿 위치에 스마트에디터 인용구 컴포넌트를 삽입하고 그 안에 text를 채운다
-    (여러 줄이면 줄마다 Enter로 구분해 붙여넣는다).
+    """캐럿 위치에 스마트에디터 인용구('프레임' 스타일, 꺾쇠 모양) 컴포넌트를
+    삽입하고 그 안에 text를 채운다(여러 줄이면 줄마다 Enter로 구분해 붙여넣는다).
 
-    정확히 어떤 인용구 스타일(꺾쇠/브라켓 모양)이 몇 번째 옵션인지는 아직 실계정
-    확인 전이라 우선 기본 인용구로 삽입한다 — tests/inspect_quote_popup.py로
-    스타일 목록을 확인하면 구분선2 때처럼 특정 스타일로 좁힐 수 있다. 인용구
-    삽입 자체가 실패해도(버튼을 못 찾는 등) 예외를 던지지 않고 텍스트만 일반
-    문단으로 붙여넣어 내용 손실을 막는다 — 위치 정보는 장식보다 우선이다."""
+    실계정에서 두 가지 버그가 확인됐다:
+    1) click_resilient로 인용구 삽입 버튼을 클릭하면, 인용구 삽입은 클릭의
+       부작용(DOM 생성)이 영속적인데 click_resilient가 실패로 착각하고 재시도해
+       인용구가 두 번 삽입됐다. 그래서 여기서는 재시도 없는 단발 클릭만 쓰고,
+       클릭 전에 팝업을 미리 정리해 애초에 막힐 일을 줄인다.
+    2) 텍스트를 다 채운 뒤 커서가 인용구 안에 그대로 남아, 다음 블록(소제목 등)이
+       인용구 안에 이어서 입력됐다. 그래서 마지막에 Enter를 두 번 눌러 인용구
+       밖으로 캐럿을 명시적으로 뺀다.
+
+    인용구 삽입 자체가 실패해도(버튼을 못 찾는 등) 예외를 던지지 않고 텍스트만
+    일반 문단으로 붙여넣어 내용 손실을 막는다 — 위치 정보는 장식보다 우선이다."""
     try:
-        await click_resilient(page, frame, frame.locator(sel.QUOTE_BTN_CSS).first)
+        await dismiss_continue_draft_popup(page)
+        await dismiss_cascading_alerts(page, frame)
+
+        # 1) 인용구 스타일 드롭다운 열기 (단발 클릭 — 재시도로 인한 중복 삽입 방지)
+        await frame.locator(sel.QUOTE_SELECT_BTN_CSS).first.click(timeout=8000)
+        await page.wait_for_timeout(600)
+
+        # 2) "프레임" 스타일 선택 (실계정 확인: 드롭다운의 6번째 옵션, 꺾쇠 모양)
+        style_option = frame.get_by_text(sel.QUOTE_STYLE_NAME, exact=True).first
+        if await is_visible(style_option, timeout=2000):
+            await style_option.click(timeout=8000)
+        else:
+            # 못 찾으면 기본 인용구로 폴백 (역시 단발 클릭)
+            try:
+                await page.keyboard.press("Escape")
+            except Exception:
+                pass
+            await frame.locator(sel.QUOTE_BTN_CSS).first.click(timeout=8000)
         await page.wait_for_timeout(500)
+
+        # 3) 인용구 안에 텍스트 채우기
         lines = text.split("\n")
         for i, line in enumerate(lines):
             if i > 0:
                 await page.keyboard.press("Enter")
             if line.strip():
                 await paste_into_focused(page, line)
+
+        # 4) 인용구 밖으로 캐럿 이동 — 안 그러면 다음 블록이 인용구 안에 이어써짐
+        await page.keyboard.press("Enter")
+        await page.keyboard.press("Enter")
         await page.wait_for_timeout(300)
     except Exception as e:
         logger.warning(f"인용구 삽입 실패 — 일반 텍스트로 대체합니다: {e}")
