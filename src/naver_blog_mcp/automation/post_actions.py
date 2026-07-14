@@ -695,8 +695,14 @@ async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
        라이브 덤프로 확인). 유일하게 안정적인 구분값인 data-value='quotation_corner'
        기반 CSS 클래스(QUOTE_STYLE_CORNER_CSS)로 지정해 해결.
     3) 텍스트를 다 채운 뒤 커서가 인용구 안에 그대로 남아, 다음 블록(소제목 등)이
-       인용구 안에 이어서 입력됐다. 그래서 마지막에 Enter를 두 번 눌러 인용구
-       밖으로 캐럿을 명시적으로 뺀다.
+       인용구 안에 이어서 입력됐다. Enter를 눌러도 인용구 컴포넌트 자신의
+       "내용" 필드 안에 줄만 추가될 뿐 절대 못 빠져나온다는 게 라이브 DOM
+       조사(tests/inspect_quote_close*.py, MARKER 텍스트로 어느 컴포넌트에
+       들어갔는지 직접 확인)로 밝혀졌다. 실제로 빠져나오는 유일한 방법은
+       ArrowDown을 정확히 2번 누르는 것(1번째: 내용→출처 필드 이동, 2번째:
+       출처 필드에서 다음 형제 컴포넌트로 이동 — 문서 맨 끝이면 새 se-text
+       컴포넌트가 자동 생성됨. Enter나 Escape+Enter, 인용구 아래 좌표 클릭,
+       Tab은 전부 실패하는 것도 같은 조사로 확인됨).
 
     인용구 삽입 자체가 실패해도(버튼을 못 찾는 등) 예외를 던지지 않고 텍스트만
     일반 문단으로 붙여넣어 내용 손실을 막는다 — 위치 정보는 장식보다 우선이다."""
@@ -729,9 +735,11 @@ async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
             if line.strip():
                 await paste_into_focused(page, line)
 
-        # 4) 인용구 밖으로 캐럿 이동 — 안 그러면 다음 블록이 인용구 안에 이어써짐
-        await page.keyboard.press("Enter")
-        await page.keyboard.press("Enter")
+        # 4) 인용구 밖으로 캐럿 이동 — 안 그러면 다음 블록이 인용구 안에 이어써짐.
+        # ArrowDown 2회: 1번째는 내용→출처 필드, 2번째가 실제로 컴포넌트를
+        # 빠져나가 다음 형제(또는 문서 끝이면 새 컴포넌트)로 이동한다(라이브 확인).
+        await page.keyboard.press("ArrowDown")
+        await page.keyboard.press("ArrowDown")
         await page.wait_for_timeout(300)
     except Exception as e:
         logger.warning(f"인용구 삽입 실패 — 일반 텍스트로 대체합니다: {e}")
