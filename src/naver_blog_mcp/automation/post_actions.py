@@ -620,7 +620,7 @@ async def _fill_title_v2(page: Page, frame, title: str) -> None:
     # 끼어들어 이전 글 제목과 겹치는 경우가 실계정에서 확인됐다. 잠깐 정착을 기다리고
     # 팝업을 한 번 더 정리한 뒤 입력한다.
     await page.wait_for_timeout(1200)
-    await dismiss_continue_draft_popup(page)
+    await dismiss_continue_draft_popup(page, frame)
     await clear_and_focus(page, frame, title_field)
     await paste_into_focused(page, title)
     # 이전 글 제목이 뒤늦게 끼어들어 겹치는 경우를 대비해 결과를 검증하고, 다르면
@@ -643,7 +643,7 @@ async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
     # 결국 성공해도 파일선택창 이벤트 대기가 먼저 타임아웃되는 문제가 실계정에서
     # 확인됐다. 그래서 이벤트 대기에 들어가기 전에 팝업을 미리 정리해 클릭이 보통
     # 한 번에 성공하게 하고, 대기 시계 자체도 넉넉히 늘린다.
-    await dismiss_continue_draft_popup(page)
+    await dismiss_continue_draft_popup(page, frame)
     await dismiss_cascading_alerts(page, frame)
     async with page.expect_file_chooser(timeout=45000) as fc_info:
         await click_resilient(page, frame, frame.get_by_role("button", name=sel.PHOTO_BTN_NAME))
@@ -707,7 +707,7 @@ async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
     인용구 삽입 자체가 실패해도(버튼을 못 찾는 등) 예외를 던지지 않고 텍스트만
     일반 문단으로 붙여넣어 내용 손실을 막는다 — 위치 정보는 장식보다 우선이다."""
     try:
-        await dismiss_continue_draft_popup(page)
+        await dismiss_continue_draft_popup(page, frame)
         await dismiss_cascading_alerts(page, frame)
 
         # 1) 인용구 스타일 드롭다운 열기 (단발 클릭 — 재시도로 인한 중복 삽입 방지)
@@ -779,7 +779,7 @@ async def _append_tags_v2(page: Page, tags) -> None:
 async def _save_draft_v2(page: Page, frame) -> None:
     draft_button = frame.get_by_role("button", name=sel.SAVE_DRAFT_BTN_NAME).first
     # 타이핑 중 자동저장으로 "이어서 작성" 팝업이 저장 직전 다시 뜰 수 있어 재정리.
-    await dismiss_continue_draft_popup(page)
+    await dismiss_continue_draft_popup(page, frame)
     await dismiss_cascading_alerts(page, frame)
     await dismiss_help_panel(page, frame)
     await click_resilient(page, frame, draft_button)
@@ -813,7 +813,7 @@ async def _ensure_write_page(page: Page) -> None:
         pass
 
 
-async def _ensure_fresh_editor(page: Page) -> None:
+async def _ensure_fresh_editor(page: Page, frame) -> None:
     """"이어서 작성" 팝업이 뜨면 취소하고, 이전 임시저장 내용이 화면에 남지 않도록
     글쓰기 페이지를 다시 불러와 완전히 새 에디터로 시작한다.
 
@@ -823,9 +823,15 @@ async def _ensure_fresh_editor(page: Page) -> None:
 
     방금 수동 로그인을 마친 직후처럼 콜드 상태에서는 이 팝업이 늦게(수 초 뒤) 렌더링될
     수 있어(실계정 확인: 짧은 판정 때문에 놓쳐서 "이어쓰기" 상태로 진행돼 이전 임시저장
-    글을 그대로 덮어씀), 매 시도마다 넉넉한 예산으로 폭넓게 재확인한다."""
+    글을 그대로 덮어씀), 매 시도마다 넉넉한 예산으로 폭넓게 재확인한다.
+
+    이 팝업이 page 최상단이 아니라 #mainFrame "안"에서 뜨는 변형("작성 중인 글이
+    있습니다")이 실계정에서 확인됐다(tests/inspect_continue_draft2.py). frame을
+    안 넘기면 이 변형을 못 찾아 조용히 "팝업 없음"으로 오판하고, 뒤이어
+    dismiss_cascading_alerts가 같은 팝업의 "확인"(=이어쓰기) 버튼을 먼저 찾아
+    클릭해버려 이전 글을 그대로 덮어쓰는 사고로 이어진다 — 반드시 frame을 넘긴다."""
     for _ in range(3):
-        dismissed = await wait_and_dismiss_continue_draft_popup(page)
+        dismissed = await wait_and_dismiss_continue_draft_popup(page, frame)
         if not dismissed:
             return
         logger.info("'이어서 작성' 팝업 취소 — 새 에디터로 다시 불러옵니다.")
@@ -846,9 +852,8 @@ async def create_blog_post_v2(
     """
     try:
         await _ensure_write_page(page)
-        await _ensure_fresh_editor(page)
-
         frame = page.frame_locator(sel.MAIN_FRAME)
+        await _ensure_fresh_editor(page, frame)
         await dismiss_cascading_alerts(page, frame)
 
         await _fill_title_v2(page, frame, title)
