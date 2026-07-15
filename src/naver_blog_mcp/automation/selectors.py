@@ -136,3 +136,20 @@ QUOTE_SELECT_BTN_CSS = ".se-document-toolbar-select-option-button[data-name='quo
 # (텍스트 매칭이 항상 실패해 기본 스타일로 폴백되던 원인). 실제 구분값은
 # data-value='quotation_corner' (6번째 옵션, 유일 CSS 클래스).
 QUOTE_STYLE_CORNER_CSS = ".se-toolbar-option-insert-quotation-quotation_corner-button"
+
+# 이미지 정렬/크기 — 삽입된 이미지를 선택하면 뜨는 속성 툴바(라이브 DOM 확정:
+# tests/inspect_image_toolbar.py). 속성 툴바와 컨텍스트 툴바에 같은 버튼이 중복
+# 존재할 수 있어(둘 다 동일 동작) 호출부에서 .first로 집는다.
+# 가운데 정렬 (data-name='align', data-value='center', 유일 클래스).
+IMAGE_ALIGN_CENTER_CSS = ".se-align-center-toolbar-button"
+# '크기 변경' 레이어 — 열기 버튼 + 너비/높이 px 입력 + 적용(확인) 버튼
+# (라이브 확정: tests/inspect_image_resize_layer.py). 프리셋이 아니라 px 직접 입력이라
+# 문서 너비의 정확한 비율(예: 1/2)로 지정할 수 있다. 입력창은 title로 구분(W/H 동일 클래스).
+IMAGE_RESIZE_OPEN_CSS = ".se-resizing-toolbar-button"
+IMAGE_RESIZE_WIDTH_INPUT = "input[title='너비']"
+IMAGE_RESIZE_HEIGHT_INPUT = "input[title='높이']"
+IMAGE_RESIZE_APPLY_CSS = ".se-custom-layer-resizing-apply-button"
+# '모든사진 적용' 체크박스 — 체크돼 있으면 한 이미지 리사이즈가 전체에 적용돼, 일괄
+# 처리 중 이미 줄인 이미지를 또 기준 삼아 연쇄 축소되는 사고가 난다. 각 이미지를
+# 독립적으로 1/2로 맞추기 위해 해제한다.
+IMAGE_RESIZE_ALL_CHECKBOX = ".se-custom-layer-resizing-checkbox"

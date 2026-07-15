@@ -651,6 +651,95 @@ async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
     await file_chooser.set_files(image_path)
     await page.wait_for_timeout(1500)
     await page.keyboard.press("Enter")
+    # 크기/정렬은 여기서 하지 않는다. 툴바·크기변경 레이어(본문 밖)를 클릭하면 캐럿이
+    # 본문 밖으로 나가 다음 블록(특히 마지막 이미지 뒤 텍스트) 입력이 유실됐다(실계정
+    # 확인). 그래서 모든 본문·태그 입력이 끝난 뒤 _apply_size_align_to_all_images로
+    # 일괄 처리해 캐럿 흐름과 완전히 분리한다.
+
+
+# 이미지 크기: 문서 너비 대비 목표 비율(1/2). 사용자 요청값 — 여기만 바꾸면 비율 조정됨.
+IMAGE_SIZE_FRACTION = 0.5
+
+
+async def _wait_image_uploaded(page: Page, img_comp, timeout_ms: int = 60000) -> bool:
+    """주어진 이미지 컴포넌트(img_comp)의 업로드 완료를 기다린다.
+
+    라이브 확인(tests/inspect_image_upload_state.py): 삽입 직후 <img> src는 한동안
+    비어있다가(업로드 중) 잠깐 data: 플레이스홀더를 거쳐, 완료되면 https 업로드 URL
+    (blogfiles.pstatic.net)로 바뀐다. 업로드 시간 편차가 커서(즉시~수십 초) 고정 대기가
+    아니라 이 조건을 폴링한다. 업로드 중에는 크기/정렬 기능이 막혀 있어 반드시 선행돼야 한다.
+
+    Returns: 완료(https src)를 확인하면 True, 예산 내 미완이면 False."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_ms / 1000
+    img = img_comp.locator("img").first
+    while loop.time() < deadline:
+        try:
+            src = await img.get_attribute("src")
+            if src and src.startswith("https"):
+                await page.wait_for_timeout(300)  # 완료 직후 안정화 여유
+                return True
+        except Exception:
+            pass
+        await page.wait_for_timeout(500)
+    logger.warning("이미지 업로드 완료 신호를 시간 내 확인 못 함 — 이 이미지의 크기/정렬 건너뜀.")
+    return False
+
+
+async def _apply_size_align_to_all_images(page: Page, frame) -> None:
+    """본문·태그 입력이 모두 끝난 뒤, 모든 이미지를 '문서 너비의 1/2' + 가운데 정렬로
+    일괄 처리한다(best-effort). 본문 삽입 중이 아니라 끝난 뒤에 하므로 캐럿 흐름을
+    건드리지 않는다 — 삽입 중 인라인 처리 시 마지막 이미지 뒤 텍스트가 유실되던 문제를
+    구조적으로 없앤다.
+
+    각 이미지는 (업로드 완료 대기 → 선택 → 1/2 리사이징 → 가운데 정렬) 순으로 처리한다.
+    '모든사진 적용'은 해제해 각 이미지를 독립적으로 맞춘다(연쇄 축소 방지)."""
+    comps = frame.locator(".se-component.se-image")
+    try:
+        n = await comps.count()
+    except Exception:
+        return
+    for i in range(n):
+        img_comp = comps.nth(i)
+        try:
+            if not await _wait_image_uploaded(page, img_comp):
+                continue
+            await img_comp.click(timeout=6000)
+            await page.wait_for_timeout(400)
+            await _resize_selected_image_half(page, frame, img_comp)
+            # 가운데 정렬 (단발 클릭).
+            await frame.locator(sel.IMAGE_ALIGN_CENTER_CSS).first.click(timeout=6000)
+            await page.wait_for_timeout(300)
+        except Exception as e:
+            logger.warning(f"이미지 {i} 크기/정렬 실패(무시): {e}")
+
+
+async def _resize_selected_image_half(page: Page, frame, img_comp) -> None:
+    """선택된 이미지를 현재(문서 너비=풀폭) 렌더 크기의 1/2로 리사이징한다.
+
+    '크기 변경' 레이어의 너비/높이 px 입력에 절반 값을 넣는다(라이브 확정:
+    tests/inspect_image_resize_layer.py). 비율 자동 잠금 여부와 무관하게 왜곡되지 않도록
+    W/H 둘 다 절반으로 지정한다. '모든사진 적용'은 해제해 다른 이미지에 연쇄 적용되지
+    않게 한다(이미 줄인 이미지를 또 기준 삼아 재축소되는 사고 방지)."""
+    img = img_comp.locator("img").first
+    dims = await img.evaluate("(el) => ({ w: el.clientWidth, h: el.clientHeight })")
+    target_w = max(1, round(dims["w"] * IMAGE_SIZE_FRACTION))
+    target_h = max(1, round(dims["h"] * IMAGE_SIZE_FRACTION))
+    await frame.locator(sel.IMAGE_RESIZE_OPEN_CSS).first.click(timeout=6000)
+    await page.wait_for_timeout(500)
+    # '모든사진 적용' 체크 해제(각 이미지 독립 크기).
+    try:
+        checkbox = frame.locator(sel.IMAGE_RESIZE_ALL_CHECKBOX).first
+        if await checkbox.is_checked():
+            await checkbox.uncheck(timeout=3000)
+    except Exception as e:
+        logger.warning(f"'모든사진 적용' 해제 실패(무시): {e}")
+    await frame.locator(sel.IMAGE_RESIZE_WIDTH_INPUT).first.fill(str(target_w))
+    await page.wait_for_timeout(150)
+    await frame.locator(sel.IMAGE_RESIZE_HEIGHT_INPUT).first.fill(str(target_h))
+    await page.wait_for_timeout(150)
+    await frame.locator(sel.IMAGE_RESIZE_APPLY_CSS).first.click(timeout=6000)
+    await page.wait_for_timeout(500)
 
 
 async def _insert_divider_at_cursor(page: Page, frame) -> None:
@@ -859,6 +948,9 @@ async def create_blog_post_v2(
         await _fill_title_v2(page, frame, title)
         await _fill_body_v2(page, frame, blocks)
         await _append_tags_v2(page, tags)
+        # 본문·태그 입력이 끝난 뒤 이미지 크기(1/2)·가운데 정렬을 일괄 처리한다
+        # (캐럿 흐름과 분리 — 인라인 처리 시 마지막 이미지 뒤 텍스트 유실 문제 해결).
+        await _apply_size_align_to_all_images(page, frame)
 
         if publish:
             result = await publish_post(page, wait_for_completion=False)
