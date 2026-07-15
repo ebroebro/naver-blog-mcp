@@ -114,8 +114,8 @@ async def login_to_naver(
                             "CAPTCHA가 감지되었습니다. HEADLESS=false로 설정하고 수동으로 풀어주세요."
                         )
 
-                # 에러 메시지 확인 (여러 개가 있을 수 있으므로 first() 사용)
-                error_msg_element = page.locator(".error_message").first()
+                # 에러 메시지 확인 (여러 개가 있을 수 있으므로 first 사용)
+                error_msg_element = page.locator(".error_message").first
                 error_msg_count = await page.locator(".error_message:visible").count()
                 if error_msg_count > 0:
                     error_msg = await error_msg_element.text_content()
