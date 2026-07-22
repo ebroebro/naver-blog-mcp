@@ -16,7 +16,10 @@ class NaverSelectors:
     LOGIN = {
         "id_input": "#id",
         "pw_input": "#pw",
-        "login_btn": [".btn_login", "button[type='submit']"],
+        # 네이버가 패스키/QR 로그인을 추가하며 버튼 구조를 바꿈(2026-07-21 실계정으로 확인:
+        # .btn_login, button[type='submit']는 더 이상 없음). 반응형 레이아웃별로
+        # #loginBtn_column / #loginBtn_row 둘 중 보이는 쪽이 실제 로그인 버튼.
+        "login_btn": ["#loginBtn_column", "#loginBtn_row", ".btn_login", "button[type='submit']"],
         "error_message": ".error_message",
     }
 
