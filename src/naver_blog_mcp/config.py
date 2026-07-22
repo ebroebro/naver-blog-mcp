@@ -20,7 +20,10 @@ class Config:
 
     # Playwright 설정
     HEADLESS: bool = os.getenv("HEADLESS", "true").lower() == "true"
-    SLOW_MO: int = int(os.getenv("SLOW_MO", "0"))
+    # SLOW_MO(액션마다 인위적 지연)는 브라우저가 보일 때(HEADLESS=false)만 눈으로 따라가기
+    # 위해 의미가 있다. headless일 땐 아무도 안 보므로 0으로 둬 불필요한 지연을 없앤다.
+    # .env의 개별 SLOW_MO 값은 더 이상 쓰지 않는다 — HEADLESS에서 자동으로 정해진다.
+    SLOW_MO: int = 0 if HEADLESS else 100
 
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
