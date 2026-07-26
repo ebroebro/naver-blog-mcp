@@ -139,6 +139,10 @@ QUOTE_SELECT_BTN_CSS = ".se-document-toolbar-select-option-button[data-name='quo
 # (텍스트 매칭이 항상 실패해 기본 스타일로 폴백되던 원인). 실제 구분값은
 # data-value='quotation_corner' (6번째 옵션, 유일 CSS 클래스).
 QUOTE_STYLE_CORNER_CSS = ".se-toolbar-option-insert-quotation-quotation_corner-button"
+# 인용구4(밑줄 스타일) — 소제목용. 6개 옵션 전부 라이브 확인(tests/inspect_quote_style4.py):
+# 인용구1=default, 인용구2=quotation_line, 인용구3=quotation_bubble,
+# 인용구4=quotation_underline, 인용구5=quotation_postit, 인용구6=quotation_corner.
+QUOTE_STYLE_UNDERLINE_CSS = ".se-toolbar-option-insert-quotation-quotation_underline-button"
 
 # 이미지 정렬/크기 — 삽입된 이미지를 선택하면 뜨는 속성 툴바(라이브 DOM 확정:
 # tests/inspect_image_toolbar.py). 속성 툴바와 컨텍스트 툴바에 같은 버튼이 중복
@@ -156,3 +160,14 @@ IMAGE_RESIZE_APPLY_CSS = ".se-custom-layer-resizing-apply-button"
 # 처리 중 이미 줄인 이미지를 또 기준 삼아 연쇄 축소되는 사고가 난다. 각 이미지를
 # 독립적으로 1/2로 맞추기 위해 해제한다.
 IMAGE_RESIZE_ALL_CHECKBOX = ".se-custom-layer-resizing-checkbox"
+
+# 텍스트 서식(볼드/가운데 정렬/폰트크기) — 텍스트를 "선택"해야 뜨는 컨텐츠 툴바에
+# 있다(캐럿만 있으면 안 보임; 라이브 확정: tests/inspect_text_format_apply2.py,
+# inspect_bold_word.py). 가운데 정렬은 문단 하나에 적용하면 이어지는 문단에도
+# 상속됨을 확인(전체 본문에 한 번만 적용하면 됨). 볼드는 선택한 부분에만 적용되고
+# 상속되지 않음(문단마다 별도 적용 필요).
+BOLD_TOOLBAR_CSS = ".se-bold-toolbar-button"
+TEXT_ALIGN_CENTER_CSS = ".se-align-center-toolbar-button"  # 이미지 정렬과 동일 클래스
+# 폰트 크기는 자유 입력이 아니라 고정 프리셋 드롭다운이다(11/13/15/16/19/24/28/30/34/38).
+FONT_SIZE_OPEN_CSS = ".se-font-size-code-toolbar-button"
+FONT_SIZE_24_CSS = ".se-toolbar-option-font-size-code-fs24-button"

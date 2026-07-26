@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from typing import Optional, Dict, Any
 from pathlib import Path
 
@@ -768,10 +769,14 @@ async def _insert_divider_at_cursor(page: Page, frame) -> None:
         logger.warning(f"구분선 삽입 실패 — 건너뜁니다: {e}")
 
 
-async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
-    """캐럿 위치에 스마트에디터 인용구(꺾쇠/모서리 브라켓 스타일, data-value=
-    'quotation_corner') 컴포넌트를 삽입하고 그 안에 text를 채운다(여러 줄이면
-    줄마다 Enter로 구분해 붙여넣는다).
+async def _insert_quote_at_cursor(page: Page, frame, text: str, style: str = "corner") -> None:
+    """캐럿 위치에 스마트에디터 인용구 컴포넌트를 삽입하고 그 안에 text를 채운다
+    (여러 줄이면 줄마다 Enter로 구분해 붙여넣는다).
+
+    style="corner"(기본, 꺾쇠/모서리 브라켓, data-value='quotation_corner')는 위치
+    정보 블록용. style="underline"(밑줄, data-value='quotation_underline')은
+    소제목용 — 텍스트를 다 채운 뒤 폰트 크기를 24로 키운다(라이브 확정:
+    tests/inspect_quote_style4.py, inspect_text_format_apply2.py).
 
     실계정에서 세 가지 버그가 확인됐다:
     1) click_resilient로 인용구 삽입 버튼을 클릭하면, 인용구 삽입은 클릭의
@@ -803,8 +808,9 @@ async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
         await frame.locator(sel.QUOTE_SELECT_BTN_CSS).first.click(timeout=8000)
         await page.wait_for_timeout(600)
 
-        # 2) 꺾쇠(모서리 브라켓) 스타일 선택 (라이브 DOM 확인: data-value='quotation_corner')
-        style_option = frame.locator(sel.QUOTE_STYLE_CORNER_CSS).first
+        # 2) 스타일 선택 (라이브 DOM 확인: data-value='quotation_corner'/'quotation_underline')
+        style_css = sel.QUOTE_STYLE_UNDERLINE_CSS if style == "underline" else sel.QUOTE_STYLE_CORNER_CSS
+        style_option = frame.locator(style_css).first
         if await is_visible(style_option, timeout=2000):
             await style_option.click(timeout=8000)
         else:
@@ -824,6 +830,11 @@ async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
             if line.strip():
                 await paste_into_focused(page, line)
 
+        # 3-1) 소제목(밑줄 스타일)이면 폰트 크기를 24로 키운다(best-effort, 장식이므로
+        # 실패해도 예외를 던지지 않는다).
+        if style == "underline":
+            await _apply_quote_font_size(page, frame, sel.FONT_SIZE_24_CSS)
+
         # 4) 인용구 밖으로 캐럿 이동 — 안 그러면 다음 블록이 인용구 안에 이어써짐.
         # ArrowDown 2회: 1번째는 내용→출처 필드, 2번째가 실제로 컴포넌트를
         # 빠져나가 다음 형제(또는 문서 끝이면 새 컴포넌트)로 이동한다(라이브 확인).
@@ -836,15 +847,173 @@ async def _insert_quote_at_cursor(page: Page, frame, text: str) -> None:
         await page.keyboard.press("Enter")
 
 
+async def _apply_quote_font_size(page: Page, frame, size_css: str) -> None:
+    """방금 채운 인용구 내용 전체를 트리플클릭으로 선택하고 폰트 크기를 적용한다
+    (best-effort). 폰트 크기는 자유 입력이 아니라 고정 프리셋 드롭다운이다(라이브
+    확정: tests/inspect_text_format_apply.py). 적용 후 인용구 내용을 다시 클릭해
+    포커스를 복구한다 — 드롭다운 클릭으로 포커스가 밖으로 나가면 바로 이어지는
+    ArrowDown 탈출 시퀀스가 엉뚱한 곳에서 작동할 수 있다."""
+    try:
+        content = frame.locator(".se-quotation").last.locator(".se-text-paragraph").first
+        await content.click(timeout=4000, click_count=3)  # 트리플클릭 = 전체 선택
+        await page.wait_for_timeout(300)
+        await frame.locator(sel.FONT_SIZE_OPEN_CSS).first.click(timeout=4000)
+        await page.wait_for_timeout(400)
+        await frame.locator(size_css).first.click(timeout=4000)
+        await page.wait_for_timeout(300)
+        await content.click(timeout=4000)
+        await page.keyboard.press("End")
+    except Exception as e:
+        logger.warning(f"인용구 폰트 크기 적용 실패(무시): {e}")
+
+
+async def _center_align_current_paragraph(page: Page, frame) -> None:
+    """방금 타이핑한(마지막) 문단을 트리플클릭으로 전체 선택한 뒤 가운데 정렬한다
+    (best-effort). 가운데 정렬은 이어지는 문단에 상속됨이 라이브로 확인됐으므로
+    (tests/inspect_text_format_apply2.py) 본문 맨 처음 문단에 한 번만 호출하면
+    된다. 정렬 버튼은 텍스트를 "선택"해야 뜨는 컨텐츠 툴바에 있다(캐럿만 있으면
+    안 보임 — 트리플클릭 같은 실제 마우스 제스처가 필요, 키보드 Shift+선택은
+    반응하지 않는 것도 확인됨). 클릭 후 포커스가 밖으로 나가므로 다시 클릭해
+    복구한다."""
+    try:
+        paragraph = frame.locator(".se-text-paragraph").last
+        await paragraph.click(timeout=4000, click_count=3)
+        await page.wait_for_timeout(300)
+        center_btn = frame.locator(sel.TEXT_ALIGN_CENTER_CSS).first
+        if await is_visible(center_btn, timeout=1500):
+            await center_btn.click(timeout=3000)
+        else:
+            logger.warning("본문 가운데 정렬 버튼을 못 찾음(무시)")
+        await page.wait_for_timeout(300)
+        await paragraph.click(timeout=3000)
+        await page.keyboard.press("End")
+    except Exception as e:
+        logger.warning(f"본문 가운데 정렬 적용 실패(무시): {e}")
+
+
+async def _select_text_in_paragraph(page: Page, frame, paragraph, substring: str) -> bool:
+    """paragraph(문단 Locator) 안에서 substring의 위치를 찾아 실제 마우스 드래그로
+    선택한다. 더블클릭 같은 진짜 마우스 제스처만 볼드 버튼이 뜨는 컨텐츠 툴바를
+    반응시킨다는 게 라이브로 확인됐다(tests/inspect_text_format_apply2.py) — 그래서
+    JS로 Selection을 직접 설정하는 대신, DOM Range로 정확한 좌표를 계산한 뒤 진짜
+    마우스 드래그(down→move→up)를 재현한다.
+
+    좌표는 #mainFrame(iframe) 내부 기준으로 계산되므로, 실제 마우스 좌표로 쓰려면
+    iframe 자신의 페이지 내 위치를 더해야 한다.
+
+    Returns: 선택에 성공했으면 True."""
+    rects = await paragraph.evaluate(
+        """(el, sub) => {
+            const text = el.textContent || '';
+            const idx = text.indexOf(sub);
+            if (idx === -1) return null;
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            let pos = 0, startNode = null, startOffset = 0, endNode = null, endOffset = 0;
+            let node;
+            while ((node = walker.nextNode())) {
+                const len = node.textContent.length;
+                if (startNode === null && idx < pos + len) {
+                    startNode = node; startOffset = idx - pos;
+                }
+                if (endNode === null && (idx + sub.length) <= pos + len) {
+                    endNode = node; endOffset = (idx + sub.length) - pos;
+                    break;
+                }
+                pos += len;
+            }
+            if (!startNode || !endNode) return null;
+            const range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            const rects = range.getClientRects();
+            if (rects.length === 0) return null;
+            const first = rects[0];
+            const last = rects[rects.length - 1];
+            return {
+                startX: first.left, startY: first.top + first.height / 2,
+                endX: last.right, endY: last.top + last.height / 2,
+            };
+        }""",
+        substring,
+    )
+    if not rects:
+        return False
+    frame_element = await page.query_selector(sel.MAIN_FRAME)
+    if not frame_element:
+        return False
+    box = await frame_element.bounding_box()
+    if not box:
+        return False
+    start_x, start_y = box["x"] + rects["startX"], box["y"] + rects["startY"]
+    end_x, end_y = box["x"] + rects["endX"], box["y"] + rects["endY"]
+    await page.mouse.move(start_x, start_y)
+    await page.mouse.down()
+    await page.mouse.move(end_x, end_y, steps=5)
+    await page.mouse.up()
+    return True
+
+
+async def _apply_bold_to_words(page: Page, frame, words: list[str]) -> None:
+    """방금 타이핑한(마지막) 문단에서 words 각각을 찾아 볼드 처리한다(best-effort).
+    볼드는 선택한 부분에만 적용되고 다른 문단엔 상속되지 않음이 라이브로 확인됐다
+    (tests/inspect_bold_word.py) — 그래서 문단마다, 단어마다 매번 적용해야 한다.
+    강조는 장식이므로 실패해도 예외를 던지지 않는다."""
+    if not words:
+        return
+    paragraph = frame.locator(".se-text-paragraph").last
+    for word in words:
+        try:
+            selected = await _select_text_in_paragraph(page, frame, paragraph, word)
+            if not selected:
+                logger.warning(f"'{word}' 위치를 못 찾음 — 볼드 건너뜀")
+                continue
+            bold_btn = frame.locator(sel.BOLD_TOOLBAR_CSS).first
+            if await is_visible(bold_btn, timeout=1500):
+                await bold_btn.click(timeout=3000)
+            else:
+                logger.warning(f"'{word}' 선택 후 볼드 버튼이 안 보임 — 건너뜀")
+            # 포커스 복구 — 다음 단어 선택/이후 타이핑을 위해 문단을 다시 클릭
+            await paragraph.click(timeout=3000)
+            await page.keyboard.press("End")
+        except Exception as e:
+            logger.warning(f"'{word}' 볼드 적용 실패(무시): {e}")
+
+
+_BOLD_MARKUP_RE = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _extract_bold_markup(text: str) -> tuple[str, list[str]]:
+    """AI가 표시한 **단어** 강조 마크업을 걷어낸 깨끗한 텍스트와, 볼드 처리할
+    부분 문자열 목록을 반환한다. 마커 자체는 네이버 에디터에 그대로 타이핑하지
+    않는다 — 실제 볼드 서식으로 별도 적용한다."""
+    bold_words: list[str] = []
+
+    def _repl(m: re.Match) -> str:
+        bold_words.append(m.group(1))
+        return m.group(1)
+
+    clean = _BOLD_MARKUP_RE.sub(_repl, text)
+    return clean, bold_words
+
+
 async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
     body_field = frame.locator(sel.BODY_FIRST_PARAGRAPH).first
     await clear_and_focus(page, frame, body_field)
+    centered = False
     for block in blocks:
         if block.get("type") == "text":
-            text = block.get("text", "")
-            if not text.strip():
+            raw_text = block.get("text", "")
+            if not raw_text.strip():
                 continue
-            await paste_into_focused(page, text)
+            clean_text, bold_words = _extract_bold_markup(raw_text)
+            await paste_into_focused(page, clean_text)
+            if not centered:
+                # 본문 맨 처음 문단에만 적용 — 가운데 정렬은 이어지는 문단에
+                # 상속됨이 라이브로 확인됐다(tests/inspect_text_format_apply2.py).
+                await _center_align_current_paragraph(page, frame)
+                centered = True
+            if bold_words:
+                await _apply_bold_to_words(page, frame, bold_words)
             await page.keyboard.press("Enter")
         elif block.get("type") == "image":
             path = block.get("path")
@@ -856,7 +1025,7 @@ async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
         elif block.get("type") == "quote":
             text = block.get("text", "")
             if text.strip():
-                await _insert_quote_at_cursor(page, frame, text)
+                await _insert_quote_at_cursor(page, frame, text, style=block.get("style", "corner"))
 
 
 async def _append_tags_v2(page: Page, tags) -> None:
