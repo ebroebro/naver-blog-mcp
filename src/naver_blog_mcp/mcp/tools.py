@@ -48,8 +48,26 @@ TOOLS_METADATA = {
                         "type": "object",
                         "properties": {
                             "type": {"type": "string", "enum": ["text", "image", "divider", "quote"]},
-                            "text": {"type": "string", "description": "type=text일 때 본문 텍스트"},
+                            "text": {
+                                "type": "string",
+                                "description": (
+                                    "type=text 또는 type=quote일 때 내용. **단어**처럼 별표 두 개로 "
+                                    "감싼 부분은 자동으로 볼드 처리된다(마커 자체는 최종 글에 남지 "
+                                    "않고 서식으로만 적용됨). 본문 전체는 첫 문단부터 자동으로 가운데 "
+                                    "정렬된다(별도 설정 불필요, 소제목/인용구는 정렬 대상에서 제외)."
+                                ),
+                            },
                             "path": {"type": "string", "description": "type=image일 때 이미지 파일 경로"},
+                            "style": {
+                                "type": "string",
+                                "enum": ["corner", "underline"],
+                                "description": (
+                                    "type=quote일 때만 사용(다른 타입엔 무시됨). 'corner'(기본값, "
+                                    "생략 가능) = 꺾쇠/모서리 브라켓 스타일, 위치·기본정보 같은 "
+                                    "안내 블록에 적합. 'underline' = 밑줄 스타일에 폰트 크기가 자동 "
+                                    "확대됨, 소제목처럼 눈에 띄어야 하는 짧은 문구에 적합."
+                                ),
+                            },
                         },
                         "required": ["type"],
                     },
