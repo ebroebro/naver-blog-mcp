@@ -831,8 +831,11 @@ async def _insert_quote_at_cursor(page: Page, frame, text: str, style: str = "co
                 await paste_into_focused(page, line)
 
         # 3-1) 소제목(밑줄 스타일)이면 폰트 크기를 24로 키운다(best-effort, 장식이므로
-        # 실패해도 예외를 던지지 않는다).
+        # 실패해도 예외를 던지지 않는다). 붙여넣기 직후 곧바로 트리플클릭하면 DOM이
+        # 아직 안 따라와 실패하는 레이스가 실계정에서 확인돼(연속 인용구 중 두 번째부터
+        # 실패) 정착 시간을 준다.
         if style == "underline":
+            await page.wait_for_timeout(400)
             await _apply_quote_font_size(page, frame, sel.FONT_SIZE_24_CSS)
 
         # 4) 인용구 밖으로 캐럿 이동 — 안 그러면 다음 블록이 인용구 안에 이어써짐.
@@ -852,8 +855,11 @@ async def _apply_quote_font_size(page: Page, frame, size_css: str) -> None:
     (best-effort). 폰트 크기는 자유 입력이 아니라 고정 프리셋 드롭다운이다(라이브
     확정: tests/inspect_text_format_apply.py). 적용 후 인용구 내용을 다시 클릭해
     포커스를 복구한다 — 드롭다운 클릭으로 포커스가 밖으로 나가면 바로 이어지는
-    ArrowDown 탈출 시퀀스가 엉뚱한 곳에서 작동할 수 있다."""
+    ArrowDown 탈출 시퀀스가 엉뚱한 곳에서 작동할 수 있다. 다른 새 서식 함수들과
+    동일하게, 자동저장 "확인" 팝업이 트리플클릭을 막을 수 있어 미리 정리한다."""
     try:
+        await dismiss_continue_draft_popup(page, frame)
+        await dismiss_cascading_alerts(page, frame)
         content = frame.locator(".se-quotation").last.locator(".se-text-paragraph").first
         await content.click(timeout=4000, click_count=3)  # 트리플클릭 = 전체 선택
         await page.wait_for_timeout(300)
@@ -874,8 +880,15 @@ async def _center_align_current_paragraph(page: Page, frame) -> None:
     된다. 정렬 버튼은 텍스트를 "선택"해야 뜨는 컨텐츠 툴바에 있다(캐럿만 있으면
     안 보임 — 트리플클릭 같은 실제 마우스 제스처가 필요, 키보드 Shift+선택은
     반응하지 않는 것도 확인됨). 클릭 후 포커스가 밖으로 나가므로 다시 클릭해
-    복구한다."""
+    복구한다.
+
+    자동저장 등으로 뜨는 "확인" 알림 팝업(se-popup-alert-confirm)이 트리플클릭을
+    막아 타임아웃나고, 그 사이 방금 타이핑한 문단 내용이 통째로 사라지는 사고가
+    실계정에서 확인됐다(팝업을 미리 안 치워서). 다른 위험 동작들(인용구/이미지
+    삽입)과 동일하게 작업 전에 팝업을 먼저 정리한다."""
     try:
+        await dismiss_continue_draft_popup(page, frame)
+        await dismiss_cascading_alerts(page, frame)
         paragraph = frame.locator(".se-text-paragraph").last
         await paragraph.click(timeout=4000, click_count=3)
         await page.wait_for_timeout(300)
@@ -957,9 +970,12 @@ async def _apply_bold_to_words(page: Page, frame, words: list[str]) -> None:
     """방금 타이핑한(마지막) 문단에서 words 각각을 찾아 볼드 처리한다(best-effort).
     볼드는 선택한 부분에만 적용되고 다른 문단엔 상속되지 않음이 라이브로 확인됐다
     (tests/inspect_bold_word.py) — 그래서 문단마다, 단어마다 매번 적용해야 한다.
-    강조는 장식이므로 실패해도 예외를 던지지 않는다."""
+    강조는 장식이므로 실패해도 예외를 던지지 않는다. 자동저장 "확인" 팝업이 마우스
+    드래그 선택을 막을 수 있어(실계정 확인) 시작 전에 미리 정리한다."""
     if not words:
         return
+    await dismiss_continue_draft_popup(page, frame)
+    await dismiss_cascading_alerts(page, frame)
     paragraph = frame.locator(".se-text-paragraph").last
     for word in words:
         try:
@@ -1007,6 +1023,11 @@ async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
                 continue
             clean_text, bold_words = _extract_bold_markup(raw_text)
             await paste_into_focused(page, clean_text)
+            if not centered or bold_words:
+                # 붙여넣기 직후 곧바로 트리플클릭/텍스트 검색을 하면 DOM이 아직
+                # 안 따라와 실패하는 레이스가 실계정에서 확인됐다(정렬 버튼을
+                # 못 찾거나 볼드 대상 단어를 못 찾음). 정착 시간을 준다.
+                await page.wait_for_timeout(400)
             if not centered:
                 # 본문 맨 처음 문단에만 적용 — 가운데 정렬은 이어지는 문단에
                 # 상속됨이 라이브로 확인됐다(tests/inspect_text_format_apply2.py).
