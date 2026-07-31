@@ -873,35 +873,60 @@ async def _apply_quote_font_size(page: Page, frame, size_css: str) -> None:
         logger.warning(f"인용구 폰트 크기 적용 실패(무시): {e}")
 
 
-async def _center_align_current_paragraph(page: Page, frame) -> None:
-    """방금 타이핑한(마지막) 문단을 트리플클릭으로 전체 선택한 뒤 가운데 정렬한다
-    (best-effort). 가운데 정렬은 이어지는 문단에 상속됨이 라이브로 확인됐으므로
-    (tests/inspect_text_format_apply2.py) 본문 맨 처음 문단에 한 번만 호출하면
-    된다. 정렬 버튼은 텍스트를 "선택"해야 뜨는 컨텐츠 툴바에 있다(캐럿만 있으면
-    안 보임 — 트리플클릭 같은 실제 마우스 제스처가 필요, 키보드 Shift+선택은
-    반응하지 않는 것도 확인됨). 클릭 후 포커스가 밖으로 나가므로 다시 클릭해
-    복구한다.
+async def _all_body_paragraphs(frame) -> list:
+    """제목을 제외한 본문 .se-text-paragraph 전부를 순서대로 반환한다.
 
-    자동저장 등으로 뜨는 "확인" 알림 팝업(se-popup-alert-confirm)이 트리플클릭을
-    막아 타임아웃나고, 그 사이 방금 타이핑한 문단 내용이 통째로 사라지는 사고가
-    실계정에서 확인됐다(팝업을 미리 안 치워서). 다른 위험 동작들(인용구/이미지
-    삽입)과 동일하게 작업 전에 팝업을 먼저 정리한다."""
+    AI 프롬프트가 "문장마다 줄바꿈"하도록 지시하면서, 텍스트 블록 하나(예:
+    2~4문장 문단)에 실제 \\n이 여러 개 포함돼 있다. 이 텍스트를 통째로
+    paste_into_focused하면, 네이버 에디터가 \\n마다 별도의 .se-text-paragraph를
+    만든다는 게 라이브로 확인됐다(tests/inspect_multiline_paste_align.py) —
+    즉 "블록 하나 = 문단 하나"라는 가정이 깨진다.
+
+    처음엔 "이 블록이 붙여넣기 전/후로 몇 개를 새로 만들었는지" 개수를 비교해
+    추적했는데, 블록과 블록 사이(Enter 직후 등) 문단 생성이 아직 안 따라온
+    상태에서 다음 블록의 "이전 개수"를 재는 타이밍 레이스로 실계정에서 볼드
+    대상 단어를 못 찾는 실패가 있었다. 매번 정확히 "이 블록이 만든 문단만"
+    추릴 필요 없이, 그냥 본문 전체에서 검색하는 쪽이 훨씬 간단하고 견고하다
+    (볼드 대상 단어가 여러 블록에 걸쳐 중복되는 경우는 드물다).
+
+    BODY_FIRST_PARAGRAPH와 동일한 CSS(.se-component.se-text .se-text-paragraph)를
+    쓴다 — 이미 제목(.se-title-text 스코프)을 제외하도록 스코프돼 있다."""
+    return await frame.locator(sel.BODY_FIRST_PARAGRAPH).all()
+
+
+async def _center_align_body_start(page: Page, frame) -> None:
+    """본문 작성 시작 전(빈 첫 문단, 캐럿만 있는 상태)에 미리 가운데 정렬을
+    걸어둔다(best-effort). 이후 타이핑/붙여넣기하는 모든 문단이 이 정렬을
+    그대로 물려받고, 인용구/구분선 등 다른 블록을 사이에 둬도 계속 유지됨이
+    라이브로 확인됐다(tests/inspect_align_before_typing.py) — 인용구 자체는
+    정렬 대상에서 제외됨(왼쪽 정렬 유지, 의도된 동작)도 함께 확인.
+
+    "정렬 열기" 드롭다운(data-name='align-drop-down-with-justify')은 텍스트
+    선택 없이 캐럿만 있어도 뜬다. 이전엔 텍스트를 붙여넣은 뒤 "텍스트 선택"이
+    있어야 뜨는 컨텐츠 툴바(TEXT_ALIGN_CENTER_CSS)로 정렬을 걸었는데, "문장마다
+    줄바꿈" 지시로 텍스트 블록 하나가 여러 문단으로 쪼개지면서(라이브 확인:
+    tests/inspect_multiline_paste_align.py) 트레일링 빈 줄을 짚어 정렬 버튼을
+    못 찾는 실패가 실계정에서 반복됐다. 타이핑 전에 한 번만 걸면 그 문제 자체가
+    없어진다.
+
+    자동저장 "확인" 팝업이 드롭다운 클릭을 막을 수 있어 작업 전에 미리 정리한다."""
     try:
         await dismiss_continue_draft_popup(page, frame)
         await dismiss_cascading_alerts(page, frame)
-        paragraph = frame.locator(".se-text-paragraph").last
-        await paragraph.click(timeout=4000, click_count=3)
-        await page.wait_for_timeout(300)
-        center_btn = frame.locator(sel.TEXT_ALIGN_CENTER_CSS).first
-        if await is_visible(center_btn, timeout=1500):
-            await center_btn.click(timeout=3000)
+        align_open = frame.locator(sel.TEXT_ALIGN_OPEN_CSS).first
+        if not await is_visible(align_open, timeout=2000):
+            logger.warning("'정렬 열기' 버튼을 못 찾음(무시)")
+            return
+        await align_open.click(timeout=4000)
+        await page.wait_for_timeout(400)
+        center_opt = frame.locator(sel.TEXT_ALIGN_CENTER_OPTION_CSS).first
+        if await is_visible(center_opt, timeout=2000):
+            await center_opt.click(timeout=4000)
         else:
-            logger.warning("본문 가운데 정렬 버튼을 못 찾음(무시)")
+            logger.warning("'가운데 정렬' 옵션을 못 찾음(무시)")
         await page.wait_for_timeout(300)
-        await paragraph.click(timeout=3000)
-        await page.keyboard.press("End")
     except Exception as e:
-        logger.warning(f"본문 가운데 정렬 적용 실패(무시): {e}")
+        logger.warning(f"본문 시작 가운데 정렬 적용 실패(무시): {e}")
 
 
 async def _select_text_in_paragraph(page: Page, frame, paragraph, substring: str) -> bool:
@@ -966,33 +991,49 @@ async def _select_text_in_paragraph(page: Page, frame, paragraph, substring: str
     return True
 
 
-async def _apply_bold_to_words(page: Page, frame, words: list[str]) -> None:
-    """방금 타이핑한(마지막) 문단에서 words 각각을 찾아 볼드 처리한다(best-effort).
-    볼드는 선택한 부분에만 적용되고 다른 문단엔 상속되지 않음이 라이브로 확인됐다
-    (tests/inspect_bold_word.py) — 그래서 문단마다, 단어마다 매번 적용해야 한다.
-    강조는 장식이므로 실패해도 예외를 던지지 않는다. 자동저장 "확인" 팝업이 마우스
-    드래그 선택을 막을 수 있어(실계정 확인) 시작 전에 미리 정리한다."""
-    if not words:
+async def _apply_bold_to_words(page: Page, frame, words: list[str], paragraphs: list) -> None:
+    """paragraphs(방금 타이핑한 블록이 실제로 만든 문단들) 안에서 words 각각을
+    찾아 볼드 처리한다(best-effort). 문장마다 줄바꿈 지시로 한 텍스트 블록이
+    여러 .se-text-paragraph로 쪼개질 수 있어(tests/inspect_multiline_paste_align.py
+    라이브 확인), 대상 단어가 어느 문장(문단)에 있는지 몰라 전부 순서대로
+    검색한다. 볼드는 선택한 부분에만 적용되고 다른 문단엔 상속되지 않음이
+    라이브로 확인됐다(tests/inspect_bold_word.py) — 그래서 단어마다 매번
+    적용해야 한다. 강조는 장식이므로 실패해도 예외를 던지지 않는다. 자동저장
+    "확인" 팝업이 마우스 드래그 선택을 막을 수 있어(실계정 확인) 시작 전에
+    미리 정리한다."""
+    if not words or not paragraphs:
         return
     await dismiss_continue_draft_popup(page, frame)
     await dismiss_cascading_alerts(page, frame)
-    paragraph = frame.locator(".se-text-paragraph").last
     for word in words:
-        try:
-            selected = await _select_text_in_paragraph(page, frame, paragraph, word)
-            if not selected:
-                logger.warning(f"'{word}' 위치를 못 찾음 — 볼드 건너뜀")
-                continue
-            bold_btn = frame.locator(sel.BOLD_TOOLBAR_CSS).first
-            if await is_visible(bold_btn, timeout=1500):
-                await bold_btn.click(timeout=3000)
-            else:
-                logger.warning(f"'{word}' 선택 후 볼드 버튼이 안 보임 — 건너뜀")
-            # 포커스 복구 — 다음 단어 선택/이후 타이핑을 위해 문단을 다시 클릭
-            await paragraph.click(timeout=3000)
-            await page.keyboard.press("End")
-        except Exception as e:
-            logger.warning(f"'{word}' 볼드 적용 실패(무시): {e}")
+        found = False
+        for paragraph in paragraphs:
+            try:
+                selected = await _select_text_in_paragraph(page, frame, paragraph, word)
+                if not selected:
+                    continue
+                found = True
+                bold_btn = frame.locator(sel.BOLD_TOOLBAR_CSS).first
+                if await is_visible(bold_btn, timeout=1500):
+                    await bold_btn.click(timeout=3000)
+                else:
+                    logger.warning(f"'{word}' 선택 후 볼드 버튼이 안 보임 — 건너뜀")
+                break
+            except Exception as e:
+                logger.warning(f"'{word}' 볼드 적용 시도 실패(무시): {e}")
+        if not found:
+            logger.warning(f"'{word}' 위치를 못 찾음 — 볼드 건너뜀")
+
+    # 볼드 대상 단어가 이 블록의 마지막 문장이 아니라 중간 문장에 있으면, 마우스
+    # 선택 후 캐럿이 그 문단(문서 중간)에 남는다. 호출부가 곧이어 누르는 Enter가
+    # 문서 끝이 아니라 그 자리에 새 줄을 만들어, 다음 블록이 엉뚱한 위치에
+    # 붙여써지는 사고가 실계정에서 확인됐다. 반드시 진짜 마지막 문단으로
+    # 캐럿을 복귀시킨 뒤 반환한다.
+    try:
+        await paragraphs[-1].click(timeout=3000)
+        await page.keyboard.press("End")
+    except Exception as e:
+        logger.warning(f"볼드 처리 후 캐럿 복구 실패(무시): {e}")
 
 
 _BOLD_MARKUP_RE = re.compile(r"\*\*(.+?)\*\*")
@@ -1015,7 +1056,10 @@ def _extract_bold_markup(text: str) -> tuple[str, list[str]]:
 async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
     body_field = frame.locator(sel.BODY_FIRST_PARAGRAPH).first
     await clear_and_focus(page, frame, body_field)
-    centered = False
+    # 타이핑 시작 전에 한 번만 가운데 정렬을 걸어둔다 — 이후 모든 문단이
+    # 상속받으므로(인용구를 사이에 둬도 유지, 인용구 자체는 제외) 문단마다
+    # 다시 적용할 필요가 없다.
+    await _center_align_body_start(page, frame)
     for block in blocks:
         if block.get("type") == "text":
             raw_text = block.get("text", "")
@@ -1023,19 +1067,20 @@ async def _fill_body_v2(page: Page, frame, blocks: list[dict]) -> None:
                 continue
             clean_text, bold_words = _extract_bold_markup(raw_text)
             await paste_into_focused(page, clean_text)
-            if not centered or bold_words:
-                # 붙여넣기 직후 곧바로 트리플클릭/텍스트 검색을 하면 DOM이 아직
-                # 안 따라와 실패하는 레이스가 실계정에서 확인됐다(정렬 버튼을
-                # 못 찾거나 볼드 대상 단어를 못 찾음). 정착 시간을 준다.
-                await page.wait_for_timeout(400)
-            if not centered:
-                # 본문 맨 처음 문단에만 적용 — 가운데 정렬은 이어지는 문단에
-                # 상속됨이 라이브로 확인됐다(tests/inspect_text_format_apply2.py).
-                await _center_align_current_paragraph(page, frame)
-                centered = True
             if bold_words:
-                await _apply_bold_to_words(page, frame, bold_words)
+                # 붙여넣기 직후 곧바로 텍스트 검색을 하면 DOM이 아직 안 따라와
+                # 실패하는 레이스가 실계정에서 확인됐다. 정착 시간을 준다.
+                await page.wait_for_timeout(400)
+                # "이 블록이 새로 만든 문단만" 추리려던 이전 방식은 블록 사이
+                # 타이밍 레이스로 대상 단어를 못 찾는 실패가 있었다(실계정 확인).
+                # 본문 전체에서 검색하는 쪽이 더 간단하고 견고하다.
+                all_paragraphs = await _all_body_paragraphs(frame)
+                await _apply_bold_to_words(page, frame, bold_words, all_paragraphs)
             await page.keyboard.press("Enter")
+            # Enter 직후 곧바로 다음 블록을 붙여넣으면 에디터가 새 줄 생성을
+            # 아직 못 따라와 다음 블록의 앞부분(심하면 문장 전체)이 씹히는
+            # 레이스가 실계정에서 확인됐다. 정착 시간을 준다.
+            await page.wait_for_timeout(300)
         elif block.get("type") == "image":
             path = block.get("path")
             if not path:

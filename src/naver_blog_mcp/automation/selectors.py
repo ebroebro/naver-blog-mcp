@@ -161,13 +161,22 @@ IMAGE_RESIZE_APPLY_CSS = ".se-custom-layer-resizing-apply-button"
 # 독립적으로 1/2로 맞추기 위해 해제한다.
 IMAGE_RESIZE_ALL_CHECKBOX = ".se-custom-layer-resizing-checkbox"
 
-# 텍스트 서식(볼드/가운데 정렬/폰트크기) — 텍스트를 "선택"해야 뜨는 컨텐츠 툴바에
-# 있다(캐럿만 있으면 안 보임; 라이브 확정: tests/inspect_text_format_apply2.py,
-# inspect_bold_word.py). 가운데 정렬은 문단 하나에 적용하면 이어지는 문단에도
-# 상속됨을 확인(전체 본문에 한 번만 적용하면 됨). 볼드는 선택한 부분에만 적용되고
-# 상속되지 않음(문단마다 별도 적용 필요).
+# 텍스트 서식(볼드/폰트크기) — 텍스트를 "선택"해야 뜨는 컨텐츠 툴바에 있다
+# (캐럿만 있으면 안 보임; 라이브 확정: tests/inspect_text_format_apply2.py,
+# inspect_bold_word.py). 볼드는 선택한 부분에만 적용되고 상속되지 않음(문단마다
+# 별도 적용 필요).
 BOLD_TOOLBAR_CSS = ".se-bold-toolbar-button"
-TEXT_ALIGN_CENTER_CSS = ".se-align-center-toolbar-button"  # 이미지 정렬과 동일 클래스
 # 폰트 크기는 자유 입력이 아니라 고정 프리셋 드롭다운이다(11/13/15/16/19/24/28/30/34/38).
 FONT_SIZE_OPEN_CSS = ".se-font-size-code-toolbar-button"
 FONT_SIZE_24_CSS = ".se-toolbar-option-font-size-code-fs24-button"
+
+# 정렬(가운데) — 캐럿만 있어도(텍스트 선택 없이) 뜨는 "정렬 열기" 드롭다운
+# (라이브 확정: tests/inspect_align_before_typing.py). 본문 작성 시작 전(빈 문단)
+# 딱 한 번만 걸면 되고, 인용구/구분선을 사이에 둬도 계속 상속됨이 확인됐다
+# (인용구 자체는 정렬 대상에서 제외됨). "텍스트 선택"이 있어야만 뜨는 컨텐츠
+# 툴바 버튼(.se-align-center-toolbar-button, 이미지 정렬과 동일 클래스라
+# IMAGE_ALIGN_CENTER_CSS로 그쪽엔 여전히 씀)을 텍스트에도 쓰려 했으나, "문장마다
+# 줄바꿈" 지시로 텍스트 블록 하나가 여러 문단으로 쪼개지면서 트레일링 빈 줄을
+# 짚어 실패하는 문제가 있어 이 방식으로 교체했다.
+TEXT_ALIGN_OPEN_CSS = "[data-name='align-drop-down-with-justify']"
+TEXT_ALIGN_CENTER_OPTION_CSS = ".se-toolbar-option-align-center-button"
