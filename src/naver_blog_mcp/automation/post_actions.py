@@ -1029,11 +1029,34 @@ async def _apply_bold_to_words(page: Page, frame, words: list[str], paragraphs: 
     # 문서 끝이 아니라 그 자리에 새 줄을 만들어, 다음 블록이 엉뚱한 위치에
     # 붙여써지는 사고가 실계정에서 확인됐다. 반드시 진짜 마지막 문단으로
     # 캐럿을 복귀시킨 뒤 반환한다.
+    #
+    # 실계정 확인(2026-08-02): 마지막 볼드 클릭 직후 "선택"이 살아있는 상태에서
+    # 아래 클릭이 se-contents-toolbar-wrap(안 닫힌 볼드 툴바)에 막혀 실패하면,
+    # 이 try 블록 전체가 스킵돼 선택이 전혀 접히지 않는다. 그 상태로 호출부의
+    # 다음 Enter가 눌리면 "선택된 텍스트를 지우고 그 자리에 줄바꿈"이 되어,
+    # 방금 볼드 처리한 단어/구절이 그대로 삭제되는 게 라이브 DOM으로 확인됐다
+    # (tests/inspect_bold_not_sticking.py). 그래서 클릭 성패와 무관하게 먼저
+    # 키보드로 선택부터 반드시 접는다(ArrowRight는 클릭이 필요 없어 툴바
+    # 가로채기의 영향을 받지 않는다).
+    try:
+        await page.keyboard.press("ArrowRight")
+    except Exception as e:
+        logger.warning(f"볼드 처리 후 선택 접기 실패(무시): {e}")
+
     try:
         await paragraphs[-1].click(timeout=3000)
+    except Exception:
+        # 일반 클릭이 잔류 툴바에 막히면, dismiss_help_panel과 동일하게 click
+        # 이벤트를 직접 디스패치해 포인터 가로채기를 우회한다.
+        try:
+            await paragraphs[-1].dispatch_event("click")
+        except Exception as e:
+            logger.warning(f"볼드 처리 후 캐럿 복구 실패(무시): {e}")
+
+    try:
         await page.keyboard.press("End")
     except Exception as e:
-        logger.warning(f"볼드 처리 후 캐럿 복구 실패(무시): {e}")
+        logger.warning(f"볼드 처리 후 End 키 실패(무시): {e}")
 
 
 _BOLD_MARKUP_RE = re.compile(r"\*\*(.+?)\*\*")
@@ -1111,27 +1134,64 @@ async def _save_draft_v2(page: Page, frame) -> None:
 
 
 async def _ensure_write_page(page: Page) -> None:
-    """글쓰기 페이지로 이동한다. nid.naver.com(로그인)으로 튕기면 세션 적용/수동 로그인을
-    최대 3분간 기다렸다가 다시 이동한다. HEADLESS=false면 열린 브라우저에서 직접
-    로그인/CAPTCHA를 풀 수 있다(원래 postToNaver.ts의 로그인 재시도 동작 이식)."""
+    """글쓰기 페이지로 이동한다. nid.naver.com(로그인)으로 튕기면:
+    - HEADLESS=false: 사용자가 열린 브라우저에서 직접 로그인/CAPTCHA를 풀 수 있도록
+      최대 3분간 대기한다(원래 postToNaver.ts의 로그인 재시도 동작 이식).
+    - HEADLESS=true: 아무도 화면을 볼 수 없으므로 3분을 그냥 흘려보내지 않고, 저장된
+      아이디/비번으로 즉시 재로그인을 1회 시도한다. 일반적인(CAPTCHA 없는) 세션 만료는
+      이걸로 headless 상태 그대로 자동 복구된다. CAPTCHA가 뜨거나 자격증명이 잘못됐으면
+      (headless로는 원천적으로 풀 수 없으므로) 재시도 없이 바로 명확한 에러로 실패시켜
+      `scripts/login.py`를 헤드 모드로 한 번 실행해 재인증하라고 안내한다."""
+    from ..config import config
+
     await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
     if "nid.naver.com" not in page.url:
         return
-    deadline = asyncio.get_running_loop().time() + 180
-    while "nid.naver.com" in page.url:
-        if asyncio.get_running_loop().time() > deadline:
-            raise NaverBlogPostError(
-                "로그인 페이지에서 벗어나지 못했습니다(세션 만료/CAPTCHA). "
-                "열린 브라우저에서 직접 로그인한 뒤 다시 실행하세요."
+
+    if config.HEADLESS:
+        from .login import (
+            CaptchaDetectedError,
+            InvalidCredentialsError,
+            NaverLoginError,
+            login_to_naver,
+        )
+
+        logger.warning(
+            "글쓰기 페이지 진입 중 로그인 페이지로 튕김 — 저장된 자격증명으로 재로그인 시도(headless)"
+        )
+        try:
+            await login_to_naver(
+                page=page,
+                user_id=config.NAVER_BLOG_ID,
+                password=config.NAVER_BLOG_PASSWORD,
+                storage_state_path=config.SESSION_STORAGE_PATH,
+                headless=True,
             )
-        await page.wait_for_timeout(2000)
+        except CaptchaDetectedError:
+            raise NaverBlogPostError(
+                "세션이 만료되어 재로그인을 시도했지만 CAPTCHA가 감지되어 headless 상태로는 풀 수 없습니다. "
+                "`uv run python scripts/login.py`를 실행해 브라우저에서 직접 로그인/CAPTCHA를 해결한 뒤 다시 실행하세요."
+            )
+        except InvalidCredentialsError as e:
+            raise NaverBlogPostError(f"저장된 계정 정보로 재로그인에 실패했습니다: {e}")
+        except NaverLoginError as e:
+            raise NaverBlogPostError(f"재로그인 중 오류가 발생했습니다: {e}")
+    else:
+        deadline = asyncio.get_running_loop().time() + 180
+        while "nid.naver.com" in page.url:
+            if asyncio.get_running_loop().time() > deadline:
+                raise NaverBlogPostError(
+                    "로그인 페이지에서 벗어나지 못했습니다(세션 만료/CAPTCHA). "
+                    "열린 브라우저에서 직접 로그인한 뒤 다시 실행하세요."
+                )
+            await page.wait_for_timeout(2000)
+
     # 로그인을 벗어났으면 글쓰기 페이지로 다시 이동
     await page.goto(sel.GO_BLOG_WRITE_URL, wait_until="domcontentloaded")
     if "nid.naver.com" in page.url:
         raise NaverBlogPostError("로그인 후에도 글쓰기 페이지 진입에 실패했습니다.")
     # 다음 실행에서 재사용하도록 세션 저장(best-effort)
     try:
-        from ..config import config
         await page.context.storage_state(path=config.SESSION_STORAGE_PATH)
     except Exception:
         pass

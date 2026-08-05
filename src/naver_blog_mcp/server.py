@@ -154,7 +154,9 @@ class NaverBlogMCPServer:
         logger.info(f"Browser launched (headless={browser_config.get('headless', True)})")
 
         # 세션 복원 또는 새 컨텍스트 생성
-        self.context = await self.session_manager.get_or_create_session(self.browser)
+        self.context = await self.session_manager.get_or_create_session(
+            self.browser, headless=config.HEADLESS
+        )
         await self.context.grant_permissions(
             ["clipboard-read", "clipboard-write"], origin="https://blog.naver.com"
         )
