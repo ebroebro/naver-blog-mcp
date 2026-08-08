@@ -1090,28 +1090,34 @@ async def _apply_bold_and_color_to_store_name(
             await bold_btn.click(timeout=3000)
 
             # 볼드 클릭으로 선택/툴바가 닫혔을 수 있어 색상 적용 전에 같은
-            # 문단에서 다시 선택한다.
+            # 문단에서 다시 선택한다. 실계정 확인(2026-08-08): 제목·인용구·여러
+            # 블록이 있는 실제 문서에서는 재선택 직후 컨텐츠 툴바(폰트/크기/볼드/
+            # 기울임/글자색/인용구변환/정렬/목록/번역까지 버튼이 많다)가 완전히
+            # 다시 렌더링되는 데 걸리는 시간이 간단한 테스트 문서보다 길어, 곧바로
+            # 글자색 버튼을 찾으면 못 찾는 레이스가 있었다(글자색 버튼이 안 보임
+            # 경고). 정착 시간을 주고 타임아웃도 넉넉히 늘린다.
             reselected = await _select_text_in_paragraph(page, frame, paragraph, store_name)
             if not reselected:
                 logger.warning(f"'{store_name}' 볼드 후 재선택 실패 — 색상 적용 건너뜀")
                 continue
+            await page.wait_for_timeout(400)
 
             color_btn = frame.locator(sel.TEXT_COLOR_OPEN_CSS).first
-            if not await is_visible(color_btn, timeout=1500):
+            if not await is_visible(color_btn, timeout=3000):
                 logger.warning(f"'{store_name}' 글자색 버튼이 안 보임 — 색상 적용 건너뜀")
                 continue
             await color_btn.click(timeout=3000)
-            await page.wait_for_timeout(300)
+            await page.wait_for_timeout(400)
 
             blue_swatch = frame.locator(sel.TEXT_COLOR_BLUE_SWATCH_CSS).first
-            if not await is_visible(blue_swatch, timeout=1500):
+            if not await is_visible(blue_swatch, timeout=2500):
                 logger.warning(f"'{store_name}' 파란색 스와치를 못 찾음")
                 continue
             await blue_swatch.click(timeout=3000)
             await page.wait_for_timeout(200)
 
             apply_btn = frame.locator(sel.TEXT_COLOR_APPLY_CSS).first
-            if await is_visible(apply_btn, timeout=1500):
+            if await is_visible(apply_btn, timeout=2500):
                 await apply_btn.click(timeout=3000)
             else:
                 logger.warning(f"'{store_name}' 색상 적용(확인) 버튼이 안 보임")
