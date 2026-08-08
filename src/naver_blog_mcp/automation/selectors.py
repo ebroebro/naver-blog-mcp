@@ -180,3 +180,15 @@ FONT_SIZE_24_CSS = ".se-toolbar-option-font-size-code-fs24-button"
 # 짚어 실패하는 문제가 있어 이 방식으로 교체했다.
 TEXT_ALIGN_OPEN_CSS = "[data-name='align-drop-down-with-justify']"
 TEXT_ALIGN_CENTER_OPTION_CSS = ".se-toolbar-option-align-center-button"
+
+# 글자색 — 볼드와 같은 컨텐츠 툴바(텍스트 선택 시에만 뜸)에 있는 "글자색" 버튼
+# (라이브 확정: tests/inspect_text_color.py). 프로퍼티 툴바에도 이름이 같은
+# 버튼(.se-property-toolbar-color-picker-button)이 있어, 컨텐츠 툴바 쪽만
+# 정확히 지정하려고 두 클래스를 함께 건다.
+TEXT_COLOR_OPEN_CSS = ".se-contents-toolbar-color-picker-button.se-font-color-toolbar-button"
+# 색상 팔레트의 각 스와치는 data-color="#RRGGBB" 속성을 가진다(라이브 확정:
+# tests/inspect_text_color3.py — 팔레트 72개 스와치 전수 덤프로 확인). 한글
+# 색상명은 title에 없고 hex만 있어, "파란색"에 해당하는 값을 직접 골랐다
+# (표준 채도 행의 파랑, 너무 연하지도 어둡지도 않아 흰 배경에 잘 읽힘).
+TEXT_COLOR_BLUE_SWATCH_CSS = ".se-color-palette[data-color='#0078cb']"
+TEXT_COLOR_APPLY_CSS = ".se-color-picker-apply-button"

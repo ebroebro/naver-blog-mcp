@@ -77,6 +77,15 @@ TOOLS_METADATA = {
                     "items": {"type": "string"},
                     "description": "첨부할 이미지 파일 경로 목록 (선택). 본문 작성 전에 이미지를 먼저 업로드합니다.",
                 },
+                "place_name": {
+                    "type": "string",
+                    "description": (
+                        "상호명(선택). 주어지면 본문에서 이 이름과 일치하는 부분(문단마다 "
+                        "첫 일치 지점)에 자동으로 볼드+파란색 서식을 적용합니다. blocks가 "
+                        "있을 때만 적용되며(v2 경로), best-effort라 일부 문단에서 못 찾아도 "
+                        "글 작성 자체는 계속 진행됩니다."
+                    ),
+                },
                 "publish": {
                     "type": "boolean",
                     "description": "즉시 발행 여부 (기본: true, false면 임시저장)",
@@ -136,6 +145,7 @@ async def handle_create_post(
     category: Optional[str] = None,
     tags: Optional[list[str]] = None,
     images: Optional[list[str]] = None,
+    place_name: Optional[str] = None,
     publish: bool = True,
 ) -> Dict[str, Any]:
     """네이버 블로그에 새 글을 작성합니다.
@@ -147,6 +157,7 @@ async def handle_create_post(
         category: 카테고리 이름 (선택)
         tags: 태그 목록 (선택)
         images: 첨부할 이미지 파일 경로 목록 (선택)
+        place_name: 상호명(선택). 주어지면 본문에서 일치하는 부분에 볼드+파란색 적용(blocks 경로 전용)
         publish: 즉시 발행 여부 (기본: True, False면 임시저장)
 
     Returns:
@@ -179,7 +190,7 @@ async def handle_create_post(
         if blocks is not None:
             from ..automation.post_actions import create_blog_post_v2
             result = await create_blog_post_v2(
-                page, title=title, blocks=blocks, tags=tags, publish=publish
+                page, title=title, blocks=blocks, tags=tags, place_name=place_name, publish=publish
             )
             result.setdefault("images_uploaded", sum(1 for b in blocks if b.get("type") == "image"))
             return result

@@ -1059,6 +1059,87 @@ async def _apply_bold_to_words(page: Page, frame, words: list[str], paragraphs: 
         logger.warning(f"볼드 처리 후 End 키 실패(무시): {e}")
 
 
+async def _apply_bold_and_color_to_store_name(
+    page: Page, frame, store_name: str, paragraphs: list
+) -> None:
+    """본문 전체에서 가게 이름과 일치하는 부분에 볼드+파란색을 적용한다(사용자
+    요청: 강조해야 할 가게 이름을 파란색+볼드로). 문단마다 첫 번째 일치 지점
+    에만 적용한다(같은 문단 안에 가게 이름이 여러 번 나오는 경우는 드물어
+    범위를 좁혔다). 장식용 서식이므로 실패해도 예외를 던지지 않는다.
+
+    볼드(토글 버튼 클릭)와 색상(팝업 열기 → 스와치 클릭 → 확인 버튼)은 서로
+    다른 UI 흐름이라 한 번의 선택으로 동시에 적용할 수 없다 — 볼드를 먼저
+    적용한 뒤, 볼드 버튼 클릭으로 풀렸을 수 있는 선택을 다시 잡고 색상을
+    적용한다(라이브 확인: 컨텐츠 툴바가 열린 채로 다른 버튼을 클릭하면 팝업이
+    닫히며 선택도 함께 풀림 — tests/inspect_text_color3.py)."""
+    if not store_name or not paragraphs:
+        return
+    await dismiss_continue_draft_popup(page, frame)
+    await dismiss_cascading_alerts(page, frame)
+
+    for paragraph in paragraphs:
+        try:
+            selected = await _select_text_in_paragraph(page, frame, paragraph, store_name)
+            if not selected:
+                continue
+
+            bold_btn = frame.locator(sel.BOLD_TOOLBAR_CSS).first
+            if not await is_visible(bold_btn, timeout=1500):
+                logger.warning(f"'{store_name}' 선택 후 볼드 버튼이 안 보임 — 건너뜀")
+                continue
+            await bold_btn.click(timeout=3000)
+
+            # 볼드 클릭으로 선택/툴바가 닫혔을 수 있어 색상 적용 전에 같은
+            # 문단에서 다시 선택한다.
+            reselected = await _select_text_in_paragraph(page, frame, paragraph, store_name)
+            if not reselected:
+                logger.warning(f"'{store_name}' 볼드 후 재선택 실패 — 색상 적용 건너뜀")
+                continue
+
+            color_btn = frame.locator(sel.TEXT_COLOR_OPEN_CSS).first
+            if not await is_visible(color_btn, timeout=1500):
+                logger.warning(f"'{store_name}' 글자색 버튼이 안 보임 — 색상 적용 건너뜀")
+                continue
+            await color_btn.click(timeout=3000)
+            await page.wait_for_timeout(300)
+
+            blue_swatch = frame.locator(sel.TEXT_COLOR_BLUE_SWATCH_CSS).first
+            if not await is_visible(blue_swatch, timeout=1500):
+                logger.warning(f"'{store_name}' 파란색 스와치를 못 찾음")
+                continue
+            await blue_swatch.click(timeout=3000)
+            await page.wait_for_timeout(200)
+
+            apply_btn = frame.locator(sel.TEXT_COLOR_APPLY_CSS).first
+            if await is_visible(apply_btn, timeout=1500):
+                await apply_btn.click(timeout=3000)
+            else:
+                logger.warning(f"'{store_name}' 색상 적용(확인) 버튼이 안 보임")
+        except Exception as e:
+            logger.warning(f"'{store_name}' 볼드+색상 적용 시도 실패(무시): {e}")
+
+    # 캐럿 복구 — _apply_bold_to_words와 동일한 이유(선택이 남아있으면 이후
+    # 호출부의 Enter 등이 선택 영역을 지울 수 있다). ArrowRight로 먼저 선택을
+    # 접고, 진짜 마지막 문단으로 클릭 이동(실패 시 dispatch_event로 우회)한다.
+    try:
+        await page.keyboard.press("ArrowRight")
+    except Exception as e:
+        logger.warning(f"가게 이름 서식 처리 후 선택 접기 실패(무시): {e}")
+
+    try:
+        await paragraphs[-1].click(timeout=3000)
+    except Exception:
+        try:
+            await paragraphs[-1].dispatch_event("click")
+        except Exception as e:
+            logger.warning(f"가게 이름 서식 처리 후 캐럿 복구 실패(무시): {e}")
+
+    try:
+        await page.keyboard.press("End")
+    except Exception as e:
+        logger.warning(f"가게 이름 서식 처리 후 End 키 실패(무시): {e}")
+
+
 _BOLD_MARKUP_RE = re.compile(r"\*\*(.+?)\*\*")
 
 
@@ -1228,9 +1309,12 @@ async def create_blog_post_v2(
     title: str,
     blocks: list[dict],
     tags: list[str] | None = None,
+    place_name: str | None = None,
     publish: bool = False,
 ) -> Dict[str, Any]:
     """blocks(텍스트/이미지 순서열)로 글을 작성한다. publish=False면 임시저장.
+    place_name이 주어지면 본문에서 그 이름과 일치하는 부분에 볼드+파란색을
+    적용한다(문단마다 첫 일치 지점만, best-effort).
 
     Returns: {"success": bool, "message": str, "post_url": str | None, "title": str}
     """
@@ -1242,6 +1326,9 @@ async def create_blog_post_v2(
 
         await _fill_title_v2(page, frame, title)
         await _fill_body_v2(page, frame, blocks)
+        if place_name:
+            all_paragraphs = await _all_body_paragraphs(frame)
+            await _apply_bold_and_color_to_store_name(page, frame, place_name, all_paragraphs)
         await _append_tags_v2(page, tags)
         # 본문·태그 입력이 끝난 뒤 이미지 크기(1/2)·가운데 정렬을 일괄 처리한다
         # (캐럿 흐름과 분리 — 인라인 처리 시 마지막 이미지 뒤 텍스트 유실 문제 해결).

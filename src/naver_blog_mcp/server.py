@@ -79,6 +79,7 @@ class NaverBlogMCPServer:
                         category=arguments.get("category"),
                         tags=arguments.get("tags"),
                         images=arguments.get("images"),
+                        place_name=arguments.get("place_name"),
                         publish=arguments.get("publish", True),
                     )
                 # elif name == "naver_blog_delete_post":
