@@ -662,13 +662,21 @@ async def _insert_image_at_cursor(page: Page, frame, image_path: str) -> None:
 IMAGE_SIZE_FRACTION = 0.5
 
 
-async def _wait_image_uploaded(page: Page, img_comp, timeout_ms: int = 60000) -> bool:
+async def _wait_image_uploaded(page: Page, img_comp, timeout_ms: int = 20000) -> bool:
     """주어진 이미지 컴포넌트(img_comp)의 업로드 완료를 기다린다.
 
     라이브 확인(tests/inspect_image_upload_state.py): 삽입 직후 <img> src는 한동안
     비어있다가(업로드 중) 잠깐 data: 플레이스홀더를 거쳐, 완료되면 https 업로드 URL
     (blogfiles.pstatic.net)로 바뀐다. 업로드 시간 편차가 커서(즉시~수십 초) 고정 대기가
-    아니라 이 조건을 폴링한다. 업로드 중에는 크기/정렬 기능이 막혀 있어 반드시 선행돼야 한다.
+    아니라 이 조건을 폴링한다(성공 시 즉시 반환하므로 정상 케이스는 이 타임아웃 값과
+    무관하게 빠르다 — 이 값은 "끝내 안 끝나는" 최악의 경우에만 영향을 준다). 업로드
+    중에는 크기/정렬 기능이 막혀 있어 반드시 선행돼야 한다.
+
+    타임아웃 60초→20초로 축소(2026-08-09, 사용자 보고: 사진 여러 장 + 다른 서식
+    작업이 겹쳐 전체 포스팅이 MCP 10분 타임아웃(-32001)에 걸림). naver-blog-writer
+    쪽에서 업로드 전 사진을 웹 표시용 크기(최대 1600px)로 미리 줄이므로(tempImages.ts
+    resizeForUpload) 정상 업로드는 대부분 20초 안에 끝난다 — 20초를 넘기면 그 이미지는
+    이번엔 포기하고 다음으로 넘어가는 편이(전체 타임아웃보다) 낫다는 판단.
 
     Returns: 완료(https src)를 확인하면 True, 예산 내 미완이면 False."""
     loop = asyncio.get_running_loop()
